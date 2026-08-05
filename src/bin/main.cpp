@@ -62,16 +62,19 @@ int main(int argc, char** argv) {
     std::string warningCdNotToDir = "";
 
     bool isActualForCwd = false;
-    std::vector<std::string> entries, backup;
+    std::vector<std::string> entries, fullPathEntries;
 
     auto updateEntries = [&] {
         DirectoryIterator iter(path);
         entries.clear();
+        fullPathEntries.clear();
         for (auto& subdirIter : iter.GetSubdirs()) {
-            entries.push_back(subdirIter.path);
+            std::string fullPath = subdirIter.path;
+            fullPathEntries.push_back(fullPath);
+            size_t pos = fullPath.rfind("/");
+            entries.push_back(fullPath.substr(pos + 1));
         }
 
-        backup = entries;
         warningCdNotToDir = "";
     };
 
@@ -79,12 +82,12 @@ int main(int argc, char** argv) {
     int prev_selected = -1;
 
     auto doCd = [&] {
-        if (!fs::is_directory(entries[selected])) {
+        if (!fs::is_directory(fullPathEntries[selected])) {
             warningCdNotToDir = "Can only cd to directory";
             return;
         }
         parent = path;
-        path = entries[selected];
+        path = fullPathEntries[selected];
         getParentPath[path] = parent;
         updateEntries();
     };
@@ -103,7 +106,7 @@ int main(int argc, char** argv) {
         if (state.focused) {
             e = text(state.label) | bold | color(Color::Black) | bgcolor(Color::LightSlateGrey);
         } else {
-            if (fs::is_directory(state.label)) {
+            if (fs::is_directory(path.string() + "/" + state.label)) {
                 e = text(state.label) | color(Color::Blue);
             } else {
                 e = text(state.label) | color(Color::White);
