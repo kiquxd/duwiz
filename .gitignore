@@ -1,1 +1,11 @@
+*
+!*/
+!*.cpp
+!*.h
+!*.hpp
+!Makefile
+!.gitignore
+!*.md
+!Dockerfile
 build
+!*.sh
