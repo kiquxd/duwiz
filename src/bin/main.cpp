@@ -67,6 +67,7 @@ int main(int argc, char** argv) {
     fs::path path = config.path;
 
     FirstInitSingleton<runtime::ThreadPool>::Init(num_threads);
+    FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj().Start();
 
     std::unordered_map<std::string, std::string> getParentPath;
     std::unordered_map<std::string, size_t> getPrevSelectedByPath;
@@ -175,6 +176,8 @@ int main(int argc, char** argv) {
     auto event_handler = CatchEvent(renderer, [&](Event event) {
         if (OneOfKeysPressed({'q', 'Q'}, event)) {
             screen.Exit();
+            auto& pool = FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
+            pool.Stop();
             return true;
         }
 

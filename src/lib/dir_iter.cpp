@@ -7,7 +7,6 @@
 #include <filesystem>
 #include <functional>
 #include <iostream>
-#include <mutex>
 
 DirectoryIterator::DirectoryIterator(const std::string& path)
     : path(path) {
@@ -27,17 +26,14 @@ DirectoryIterator::DirectoryIterator(const std::string& path)
     std::condition_variable isFinished;
     std::mutex mutex;
 
-    size_t runningCalls = 1;
+    std::atomic<size_t> runningCalls{1};
 
     std::function<void(const fs::path&)> dirCoro = [&](const fs::path& path) {
         fs::directory_iterator iter(path);
         for (auto entry: iter) {
             if (entry.is_directory()) {
-                {
-                    std::lock_guard guard(mutex);
-                    ++runningCalls;
-                }
-
+                runningCalls.fetch_add(1);
+                
                 auto poolCoro = [&, path = entry.path()] {
                     dirCoro(path);
                 };
@@ -46,13 +42,7 @@ DirectoryIterator::DirectoryIterator(const std::string& path)
                 totalSize.fetch_add(entry.file_size(), std::memory_order::relaxed);
             }
         }
-        bool finished;
-        {
-            std::lock_guard lock(mutex);
-            finished = (--runningCalls == 0);
-        }
-
-        if (finished) {
+        if (runningCalls.fetch_sub(1) == 1) {
             isFinished.notify_one();
         }
     };
