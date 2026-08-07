@@ -12,3 +12,16 @@ bool OneOfKeysPressed(const std::vector<char>& chars, Event event) {
     }
     return false;
 }
+
+
+Element RenderMultiLine(const std::string& textStr) {
+    Elements lines;
+    std::stringstream ss(textStr);
+    std::string line;
+    
+    while (std::getline(ss, line, '\n')) {
+        lines.push_back(text(line));
+    }
+    
+    return vbox(std::move(lines));
+}

@@ -1,4 +1,5 @@
-#include "types.h"
+#include <string>
+#include <vector>
 
 struct DirectoryIterator {
     std::string path;

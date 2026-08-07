@@ -1,14 +1,14 @@
 #include "dir_tools.h"
+#include <cassert>
+#include "types.h"
 
 bool IsDirCached(const fs::path& path) {
-    auto& cachedDirs = CachedSize::getInstance();
-    auto& cachedMap = cachedDirs.GetObj();
+    auto& cachedMap = CachedSize::Instance().GetObj();
     if (cachedMap.find(path) == cachedMap.end()) {
         return false;
     }
     
-    auto& validDirs = CachedChecker::getInstance();
-    auto& validMap = validDirs.GetObj();
+    auto& validMap = CachedChecker::Instance().GetObj();
     if (validMap.find(path) == validMap.end()) {
         return false;
     }
@@ -16,8 +16,7 @@ bool IsDirCached(const fs::path& path) {
 }
 
 size_t GetCachedSize(const fs::path &path) {
-    auto& cachedDirs = CachedSize::getInstance();
-    auto& cachedMap = cachedDirs.GetObj();
+    auto& cachedMap = CachedSize::Instance().GetObj();
 
     assert(IsDirCached(path));
 

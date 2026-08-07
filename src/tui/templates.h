@@ -13,3 +13,5 @@ using namespace ftxui;
 
 bool KeyPressed(char, Event);
 bool OneOfKeysPressed(const std::vector<char>&, Event);
+
+Element RenderMultiLine(const std::string& textStr);
