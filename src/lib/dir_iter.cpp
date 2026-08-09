@@ -2,19 +2,19 @@
 #include "dir_tools.h"
 #include "singleton.h"
 #include "thread_pool.h"
+#include "types.h"
 #include <atomic>
-#include <condition_variable>
 #include <filesystem>
-#include <functional>
-#include <iostream>
+#include <system_error>
 
 DirectoryIterator::DirectoryIterator(const std::string& path)
     : path(path) {
 }
 
 [[maybe_unused]] size_t DirectoryIterator::UpdateActualSize() {
-    if (IsDirCached(path)) {
-        return GetCachedSize(path);
+    Cacher cacher;
+    if (cacher.IsDirCached(path)) {
+        return cacher.GetCachedSize(path);
     }
     auto& pool = FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
     if (!fs::is_directory(path)) {
@@ -23,34 +23,38 @@ DirectoryIterator::DirectoryIterator(const std::string& path)
 
     std::atomic<size_t> totalSize = 0;
     
-    std::condition_variable isFinished;
     std::mutex mutex;
 
-    std::atomic<size_t> runningCalls{1};
+    std::atomic<size_t> runningCalls{0};
 
-    std::function<void(const fs::path&)> dirCoro = [&](const fs::path& path) {
-        fs::directory_iterator iter(path);
-        for (auto entry: iter) {
-            if (entry.is_directory()) {
-                runningCalls.fetch_add(1);
-                
-                auto poolCoro = [&, path = entry.path()] {
-                    dirCoro(path);
-                };
-                pool.Submit(poolCoro);
-            } else {
-                totalSize.fetch_add(entry.file_size(), std::memory_order::relaxed);
+    std::error_code ec;
+    fs::directory_iterator iter(path, ec);
+    if (ec) {
+        return 0;
+    }
+
+    for (auto entry: iter) {
+        if (entry.is_directory()) {
+            runningCalls.fetch_add(1, std::memory_order::relaxed);
+            pool.Submit([&, subdirPath = entry.path()] {
+                DirectoryIterator subdirIter(subdirPath);
+                totalSize.fetch_add(subdirIter.UpdateActualSize());
+                runningCalls.fetch_sub(1, std::memory_order::relaxed);
+            });
+        } else {
+            size_t entrySize;
+            try {
+                entrySize = entry.file_size();
+            } catch (...) {
+                entrySize = 0;
             }
+            totalSize.fetch_add(entrySize);
         }
-        if (runningCalls.fetch_sub(1) == 1) {
-            isFinished.notify_one();
-        }
-    };
+    }
 
-    dirCoro(path);
+    pool.HelpUntil([&] { return runningCalls.load(std::memory_order::relaxed) == 0; });
 
-    std::unique_lock<std::mutex> lock(mutex);
-    isFinished.wait(lock, [&] { return runningCalls.load() == 0; });
+    cacher.Update(path, totalSize.load());
 
     return totalSize.load(std::memory_order::relaxed);
 }

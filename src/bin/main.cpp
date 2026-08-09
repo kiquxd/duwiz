@@ -75,18 +75,22 @@ int main(int argc, char** argv) {
 
     std::string warningCdNotToDir = "";
 
-    bool isActualForCwd = false;
     std::vector<std::string> dirEntries, fullPathEntries;
     std::vector<std::string> sizeEntries;
 
     auto updateSizeEntry = [&](size_t size) {
+        if (size < 1024) {
+            return std::to_string(size) + " bytes";
+        }
+        size *= 10;
         std::vector<std::string> suffix = {"bytes", "Kb", "Mb", "Gb", "Tb"};
         size_t index = 0;
         while (size >= 1024) {
             size /= 1024;
             ++index;
         }
-        return std::to_string(size) + ' ' + suffix[index];
+        double res = static_cast<double>(size) / 10;
+        return std::format("{:.1f}", res) + ' ' + suffix[index];
     };
 
     auto updateEntries = [&] {
@@ -167,6 +171,7 @@ int main(int argc, char** argv) {
                 dirMenu->Render() | size(WIDTH, GREATER_THAN, MIN_DIR_ENTRY_LEN),
                 sizeMenu->Render() | size(WIDTH, GREATER_THAN, MIN_SIZE_ENTRY_LEN),
             }) | frame | border,
+            text("$ " + path.string()) | bold | color(Color::Grey0),
             text(warningCdNotToDir) | color(Color::Grey0)
         });
     });

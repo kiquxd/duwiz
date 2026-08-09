@@ -53,6 +53,20 @@ public:
 
     void Start();
 
+    template <typename Predicate>
+    void HelpUntil(Predicate&& done) {
+        size_t retries = 0;
+        while (!std::invoke(done)) {
+            auto task = queue_.TryPopFront();
+            if (task.has_value()) {
+                (*task)();
+            } else if (++retries == 5) {
+                std::this_thread::yield();
+                retries = 0;
+            }
+        }
+    }
+
     void Stop();
 
     ~ThreadPool() {
