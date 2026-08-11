@@ -1,25 +1,21 @@
 #include "dir_tools.h"
 #include <cassert>
+#include <iostream>
 #include <mutex>
-#include "types.h"
 
 bool Cacher::IsDirCached(const fs::path& path) {
     std::lock_guard guard(mutex);
 
-    auto& validMap = CachedChecker::Instance().GetObj();
-    if (validMap.find(path) == validMap.end()) {
-        return false;
-    }
-    return validMap[path];
+    return sizes.contains(path);
 }
 
 size_t Cacher::GetCachedSize(const fs::path& path) {
+    std::cout << path << ' ' << IsDirCached(path) << '\n';
     assert(IsDirCached(path));
-    
-    auto& cachedMap = CachedSize::Instance().GetObj();
+
     std::lock_guard guard(mutex);
 
-    return cachedMap[path];
+    return sizes[path];
 }
 
 void Cacher::Update(const fs::path& path, size_t size) {
@@ -29,9 +25,11 @@ void Cacher::Update(const fs::path& path, size_t size) {
     
     std::lock_guard guard(mutex);
 
-    auto& cachedMap = CachedSize::Instance().GetObj();
-    cachedMap[path] = size;
+    sizes[path] = size;
+}
 
-    auto& validMap = CachedChecker::Instance().GetObj();
-    validMap[path] = true;
+void Cacher::Invalidate(const fs::path& path) {
+    std::lock_guard guard(mutex);
+
+    sizes.erase(path);
 }

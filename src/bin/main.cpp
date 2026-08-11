@@ -3,6 +3,7 @@
 #include "lib/thread_pool.h"
 #include "lib/singleton.h"
 #include "lib/argparser.h"
+#include "lib/dir_tools.h"
 
 #include <cstdio>
 #include <cstring>
@@ -98,12 +99,16 @@ int main(int argc, char** argv) {
         sizeEntries.clear();
         dirEntries.clear();
         fullPathEntries.clear();
+        iter.AsyncSizeUpdate();
+
+        auto& cacher = Singleton<Cacher>::Instance().GetObj();
+
         for (auto& subdirIter : iter.GetSubdirs()) {
             std::string fullPath = subdirIter.path;
             fullPathEntries.push_back(fullPath);
             size_t pos = fullPath.rfind("/");
             std::string shortPath = fullPath.substr(pos + 1);
-            size_t dirSize = subdirIter.UpdateActualSize();
+            size_t dirSize = cacher.GetCachedSize(fullPath);
             auto sizeEntry = updateSizeEntry(dirSize);
             dirEntries.push_back(std::move(shortPath));
             sizeEntries.push_back(std::move(sizeEntry));

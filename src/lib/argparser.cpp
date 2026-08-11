@@ -18,6 +18,7 @@ Config parseFlags(int argc, char* argv[]) {
         switch (opt) {
             case 'h':
                 config.flags.insert("help");
+                break;
 
             case 'p':
                 config.flags.insert("path");
@@ -43,7 +44,7 @@ Config parseFlags(int argc, char* argv[]) {
         }
     }
 
-    if (config.path.empty()) {
+    if (config.path.empty() || !config.flags.contains("jobs")) {
         config.invalid = true;
     }
 
