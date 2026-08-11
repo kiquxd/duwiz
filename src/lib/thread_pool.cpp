@@ -30,10 +30,6 @@ void ThreadPool::WorkerLoop() {
     }
 }
 
-void ThreadPool::Submit(Task task) {
-    queue_.Push(std::move(task));
-}
-
 void ThreadPool::Start() {
     for (size_t i = 0; i < num_threads_; ++i) {
         workers_.emplace_back([&]() {

@@ -2,10 +2,7 @@
 #include "dir_tools.h"
 #include "singleton.h"
 #include "thread_pool.h"
-#include <atomic>
-#include <condition_variable>
 #include <filesystem>
-#include <mutex>
 #include <system_error>
 
 DirectoryIterator::DirectoryIterator(const std::string& path)
@@ -34,11 +31,7 @@ void DirectoryIterator::TraverseDirectory(Callable&& callback, Int& totalSize) {
             } catch (...) {
                 entrySize = 0;
             }
-            if constexpr (requires { totalSize.fetch_add(entrySize); }) {
-                totalSize.fetch_add(entrySize, std::memory_order::relaxed);            
-            } else {
-                totalSize += entrySize;
-            }
+            totalSize += entrySize;
         }
     }
 }
@@ -78,45 +71,34 @@ std::optional<size_t> DirectoryIterator::IsFileOrCached() {
 }
 
 [[maybe_unused]] size_t DirectoryIterator::AsyncSizeUpdate() {
-    if (auto res = IsFileOrCached(); res.has_value()) {
-        return res.value();
+    if (auto result = IsFileOrCached()) {
+        return *result;
     }
 
-    auto& pool = FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
+    auto& pool =
+        FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
     auto& cacher = Singleton<Cacher>::Instance().GetObj();
 
-    std::atomic<size_t> totalSize = 0;
-    
-    std::mutex mutex;
-    std::condition_variable isFinished;
+    size_t totalSize = 0;
+    std::vector<std::future<size_t>> futures;
 
-    std::atomic<size_t> runningCalls{0};
-
-    std::error_code ec;
-    fs::directory_iterator iter(path, ec);
-    if (ec) {
-        return 0;
-    }
-
-    auto callback = [&](auto entry) {
-        runningCalls.fetch_add(1, std::memory_order::relaxed);
-        pool.Submit([&, subdirPath = entry.path()] {
-            DirectoryIterator subdirIter(subdirPath);
-            totalSize.fetch_add(subdirIter.SyncSizeUpdate());
-            if (runningCalls.fetch_sub(1, std::memory_order::relaxed) == 1) {
-                isFinished.notify_one();
-            }
-        });
+    auto submitSubdir = [&](const auto& entry) {
+        futures.push_back(
+            pool.Submit([subdirPath = entry.path()] {
+                DirectoryIterator iterator(subdirPath.string());
+                return iterator.SyncSizeUpdate();
+            })
+        );
     };
 
-    TraverseDirectory(std::move(callback), totalSize);
+    TraverseDirectory(submitSubdir, totalSize);
 
-    std::unique_lock lock(mutex);
-    isFinished.wait(lock, [&] { return runningCalls.load(std::memory_order::relaxed) == 0; });
+    for (auto& future : futures) {
+        totalSize += future.get();
+    }
 
-    cacher.Update(path, totalSize.load());
-
-    return totalSize.load(std::memory_order::relaxed);
+    cacher.Update(path, totalSize);
+    return totalSize;
 }
 
 std::vector<DirectoryIterator> DirectoryIterator::GetSubdirs() const {
