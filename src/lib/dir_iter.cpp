@@ -37,15 +37,8 @@ void DirectoryIterator::TraverseDirectory(Callable&& callback, Int& totalSize) {
 }
 
 std::optional<size_t> DirectoryIterator::IsFileOrCached() {
-    if (fs::is_symlink(path)) {
-        return 0;
-    }
-    if (!fs::is_directory(path)) {
-        return fs::file_size(path);
-    }
-
     auto& cacher = Singleton<Cacher>::Instance().GetObj();
-    if (cacher.IsDirCached(path)) {
+    if (cacher.IsCached(path)) {
         return cacher.GetCachedSize(path);
     }
     return std::nullopt;

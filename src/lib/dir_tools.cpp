@@ -3,20 +3,27 @@
 #include <filesystem>
 #include <mutex>
 
-bool Cacher::IsDirCached(const fs::path& path) {
+bool Cacher::IsCached(const fs::path& path) {
+    if (fs::is_symlink(path)) {
+        return true;
+    }
+    if (!fs::is_directory(path)) {
+        return true;
+    }
     std::lock_guard guard(mutex);
 
     return sizes.contains(path);
 }
 
 size_t Cacher::GetCachedSize(const fs::path& path) {
+    assert(IsCached(path));
+
     if (fs::is_symlink(path)) {
         return 0;
     }
     if (!fs::is_directory(path)) {
         return fs::file_size(path);
     }
-    assert(IsDirCached(path));
 
     std::lock_guard guard(mutex);
 
@@ -24,7 +31,7 @@ size_t Cacher::GetCachedSize(const fs::path& path) {
 }
 
 void Cacher::Update(const fs::path& path, size_t size) {
-    if (IsDirCached(path)) {
+    if (IsCached(path)) {
         return;
     }
     
