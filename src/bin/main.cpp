@@ -30,6 +30,10 @@ constexpr size_t MAX_DIR_ENTRY_LEN = 48;
 constexpr size_t MIN_SIZE_ENTRY_LEN = 12;
 constexpr size_t MAX_SIZE_ENTRY_LEN = 24;
 
+constexpr size_t BrowserWin = 0;
+constexpr size_t PromptWin = 1;
+constexpr size_t PopupWin = 2;
+
 int main(int argc, char** argv) {
     Config config = parseFlags(argc, argv);
     if (config.invalid || config.flags.contains("help")) {
@@ -77,11 +81,15 @@ int main(int argc, char** argv) {
 
     int selected = 0;
 
-    int activeTab = 0;
+    int activeTab = BrowserWin;
     std::string inputMsg;
     char savedChar;
 
     auto doCd = [&] {
+        if (fullPathEntries.size() <= selected) {
+            msgOrWarning.SetWarning("Selected index out of range");
+            return;
+        }
         if (!fs::is_directory(fullPathEntries[selected])) {
             msgOrWarning.SetWarning("Can only cd to directory");
             return;
@@ -107,17 +115,23 @@ int main(int argc, char** argv) {
             case 'r': {
                 std::string& fromPath = fullPathEntries[selected];
                 std::string toPath = path.string() + "/" + inputMsg;
-                fs::rename(fromPath, path.string() + "/" + inputMsg);
-                msgOrWarning.SetMsg("Successfully renamed");
 
                 auto& cacher = Singleton<Cacher>::Instance().GetObj();
                 if (cacher.IsCached(fromPath)) {
                     size_t size = cacher.GetCachedSize(fromPath);
+
+                    fs::rename(fromPath, toPath);
+
                     cacher.Invalidate(fromPath);
                     cacher.Update(toPath, size);
+
+                    dirEntries[selected] = inputMsg;
+                    fullPathEntries[selected] = toPath;
                 } else {
                     assert(false && "Shouldn't happen (entry should be cached)");
                 }
+                msgOrWarning.SetMsg("Successfully renamed");
+
                 return true;
             } case 'm': {
                 auto res = mkdir(path, inputMsg);
@@ -198,65 +212,6 @@ int main(int argc, char** argv) {
 
     auto screen = ScreenInteractive::Fullscreen();
 
-    auto mainEventHandler = CatchEvent(mainRenderer, [&](Event event) {
-        if (OneOfKeysPressed({'q', 'Q'}, event)) {
-            screen.Exit();
-            auto& pool = FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
-            pool.Stop();
-            return true;
-        }
-
-        if (event == Event::ArrowLeft) {
-            undoCd();
-            return true;
-        }
-
-        if (event == Event::ArrowRight) {
-            doCd();
-            return true;
-        }
-
-        if (OneOfKeysPressed({'c', 'C'}, event)) {
-            activeTab = 1;
-            savedChar = 'c';
-            inputMsg = "";
-            return true;
-        }
-
-        if (OneOfKeysPressed({'m', 'M'}, event)) {
-            activeTab = 1;
-            savedChar = 'm';
-            inputMsg = "";
-            return true;
-        }
-
-        if (OneOfKeysPressed({'r', 'R'}, event)) {
-            activeTab = 1;
-            savedChar = 'r';
-            inputMsg = "";
-            return true;
-        }
-
-        if (OneOfKeysPressed({'d', 'D'}, event)) {
-            if (!fs::remove(fullPathEntries[selected])) {
-                msgOrWarning.SetWarning("Failed to remove entry");
-                return true;
-            }
-            auto& cacher = Singleton<Cacher>::Instance().GetObj();
-            size_t size = cacher.GetCachedSize(fullPathEntries[selected]);
-            cacher.Update(path, cacher.GetCachedSize(path) - size);
-
-            fullPathEntries.erase(fullPathEntries.begin() + selected);
-            dirEntries.erase(dirEntries.begin() + selected);
-            sizeEntries.erase(sizeEntries.begin() + selected);
-            return true;
-        }
-
-        msgOrWarning.Reset();
-
-        return false;
-    });
-
     auto inputField = Input(&inputMsg);
 
     auto promptRenderer = Renderer(inputField, [&] {
@@ -267,32 +222,136 @@ int main(int argc, char** argv) {
         }) | border | size(WIDTH, EQUAL, 40) | size(HEIGHT, EQUAL, 8);
     });
 
-    auto container = Container::Tab({mainEventHandler, promptRenderer}, &activeTab);
+    auto popupRenderer = Renderer([&] {
+        return vbox({
+            text("Are you sure you want to delete this entry?") | bold | color(Color::Yellow) | center,
+            separator(),
+            hbox({
+                filler() | size(WIDTH, EQUAL, 5),
+                text("[Y]es") | color(Color::LightSlateGrey),
+                filler(),
+                text("[N]o") | color(Color::LightSlateGrey),
+                filler() | size(WIDTH, EQUAL, 5)
+            })
+        }) | border | size(WIDTH, EQUAL, 50) | size(HEIGHT, EQUAL, 6);
+    });
+
+    auto container = Container::Tab({mainRenderer, promptRenderer, popupRenderer}, &activeTab);
 
     auto finalRenderer = Renderer(container, [&] {
-        if (activeTab == 1) {
+        if (activeTab == PromptWin) {
             return dbox({
                 mainRenderer->Render() | dim,
                 promptRenderer->Render() | clear_under | center
             });
         }
+        if (activeTab == PopupWin) {
+            return dbox({
+                mainRenderer->Render() | dim,
+                popupRenderer->Render() | clear_under | center
+            });
+        }
         return mainRenderer->Render();
     });
 
-    auto promptEventHandler = CatchEvent(finalRenderer, [&](const Event& event) {
-        if (event == Event::Return) {
-            onSubmit();
-            activeTab = 0;
-            return true;
+    auto eventHandler = CatchEvent(finalRenderer, [&](Event event) {
+        if (activeTab == PromptWin) {
+            if (event == Event::Return) {
+                onSubmit();
+                activeTab = BrowserWin;
+                return true;
+            }
+            if (event == Event::Escape) {
+                inputMsg = "";
+                activeTab = BrowserWin;
+                return true;
+            }
+        } else if (activeTab == BrowserWin) {
+            if (OneOfKeysPressed({'q', 'Q'}, event)) {
+                screen.Exit();
+                auto& pool = FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
+                pool.Stop();
+                return true;
+            }
+
+            if (event == Event::ArrowLeft) {
+                undoCd();
+                return true;
+            }
+
+            if (event == Event::ArrowRight) {
+                doCd();
+                return true;
+            }
+
+            if (OneOfKeysPressed({'c', 'C'}, event)) {
+                activeTab = PromptWin;
+                savedChar = 'c';
+                inputMsg = "";
+                return true;
+            }
+
+            if (OneOfKeysPressed({'m', 'M'}, event)) {
+                activeTab = PromptWin;
+                savedChar = 'm';
+                inputMsg = "";
+                return true;
+            }
+
+            if (OneOfKeysPressed({'r', 'R'}, event)) {
+                activeTab = PromptWin;
+                savedChar = 'r';
+                inputMsg = "";
+                return true;
+            }
+
+            if (OneOfKeysPressed({'d', 'D'}, event)) {
+                std::string& rmPath = fullPathEntries[selected];
+                if (fs::is_directory(rmPath) && !fs::is_empty(rmPath)) {
+                    msgOrWarning.SetWarning("Not empty folders deletion is not supported for now");
+                    return true;
+                }
+                activeTab = PopupWin;
+                return true;
+            }
+        } else {
+            if (OneOfKeysPressed({'y', 'Y'}, event)) {
+                std::string& rmPath = fullPathEntries[selected];
+                if (fs::is_directory(rmPath) && !fs::is_empty(rmPath)) {
+                    msgOrWarning.SetWarning("Not empty folders deletion is not supported for now");
+                    return true;
+                }
+                auto& cacher = Singleton<Cacher>::Instance().GetObj();
+                size_t size = cacher.GetCachedSize(rmPath);
+
+                if (!fs::remove(fullPathEntries[selected])) {
+                    msgOrWarning.SetWarning("Failed to remove entry");
+                    return true;
+                }
+
+                cacher.Update(path, cacher.GetCachedSize(path) - size);
+
+                fullPathEntries.erase(fullPathEntries.begin() + selected);
+                dirEntries.erase(dirEntries.begin() + selected);
+                sizeEntries.erase(sizeEntries.begin() + selected);
+                msgOrWarning.SetMsg("Successfully deleted entry");
+                activeTab = BrowserWin;
+                return true;
+            }
+
+            if (OneOfKeysPressed({'n', 'N'}, event)) {
+                activeTab = BrowserWin;
+                return true;
+            }
+            return false;
         }
-        if (event == Event::Escape) {
-            inputMsg = "";
-            return true;
-        }
+
+        msgOrWarning.Reset();
+
         return false;
     });
 
     updateEntries();
 
-    screen.Loop(promptEventHandler);
+    screen.Loop(eventHandler);
 }
