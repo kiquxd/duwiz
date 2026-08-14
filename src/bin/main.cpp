@@ -15,6 +15,8 @@
 #include <ftxui/screen/screen.hpp>
 #include <ftxui/dom/node.hpp>
 
+#include <chafa/chafa.h>
+
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
@@ -30,9 +32,11 @@ constexpr size_t MAX_DIR_ENTRY_LEN = 48;
 constexpr size_t MIN_SIZE_ENTRY_LEN = 12;
 constexpr size_t MAX_SIZE_ENTRY_LEN = 24;
 
-constexpr size_t BrowserWin = 0;
-constexpr size_t PromptWin = 1;
-constexpr size_t PopupWin = 2;
+enum TabIndex : int {
+    Browser = 0,
+    Prompt = 1,
+    Popup = 2
+};
 
 int main(int argc, char** argv) {
     Config config = parseFlags(argc, argv);
@@ -81,7 +85,7 @@ int main(int argc, char** argv) {
 
     int selected = 0;
 
-    int activeTab = BrowserWin;
+    int activeTab = TabIndex::Browser;
     std::string inputMsg;
     char savedChar;
 
@@ -169,6 +173,9 @@ int main(int argc, char** argv) {
         return false;
     };
 
+    Elements filePreview;
+    std::string fileType;
+
     auto menuOption = MenuOption();
     menuOption.on_enter = doCd;
 
@@ -176,6 +183,7 @@ int main(int argc, char** argv) {
         Element e;
         if (state.active) {
             e = text(state.label) | bold | color(Color::Black) | bgcolor(Color::LightSlateGrey);
+            fileType = getFileType(fullPathEntries[selected]);
         } else {
             if (fs::is_directory(path.string() + "/" + state.label)) {
                 e = text(state.label) | color(Color::Blue);
@@ -204,6 +212,11 @@ int main(int argc, char** argv) {
             hbox({
                 dirMenu->Render() | size(WIDTH, GREATER_THAN, MIN_DIR_ENTRY_LEN),
                 sizeMenu->Render() | size(WIDTH, GREATER_THAN, MIN_SIZE_ENTRY_LEN),
+                separator(),
+                vbox({
+                    vbox(std::move(filePreview)),
+                    text(fileType) | center
+                }) | xflex
             }) | frame | border,
             text("$ " + path.string()) | bold | color(Color::LightSlateGrey),
             msgOrWarning.Render()
@@ -239,13 +252,13 @@ int main(int argc, char** argv) {
     auto container = Container::Tab({mainRenderer, promptRenderer, popupRenderer}, &activeTab);
 
     auto finalRenderer = Renderer(container, [&] {
-        if (activeTab == PromptWin) {
+        if (activeTab == TabIndex::Prompt) {
             return dbox({
                 mainRenderer->Render() | dim,
                 promptRenderer->Render() | clear_under | center
             });
         }
-        if (activeTab == PopupWin) {
+        if (activeTab == TabIndex::Popup) {
             return dbox({
                 mainRenderer->Render() | dim,
                 popupRenderer->Render() | clear_under | center
@@ -255,18 +268,18 @@ int main(int argc, char** argv) {
     });
 
     auto eventHandler = CatchEvent(finalRenderer, [&](Event event) {
-        if (activeTab == PromptWin) {
+        if (activeTab == TabIndex::Prompt) {
             if (event == Event::Return) {
                 onSubmit();
-                activeTab = BrowserWin;
+                activeTab = TabIndex::Browser;
                 return true;
             }
             if (event == Event::Escape) {
                 inputMsg = "";
-                activeTab = BrowserWin;
+                activeTab = TabIndex::Browser;
                 return true;
             }
-        } else if (activeTab == BrowserWin) {
+        } else if (activeTab == TabIndex::Browser) {
             if (OneOfKeysPressed({'q', 'Q'}, event)) {
                 screen.Exit();
                 auto& pool = FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
@@ -285,21 +298,21 @@ int main(int argc, char** argv) {
             }
 
             if (OneOfKeysPressed({'c', 'C'}, event)) {
-                activeTab = PromptWin;
+                activeTab = TabIndex::Prompt;
                 savedChar = 'c';
                 inputMsg = "";
                 return true;
             }
 
             if (OneOfKeysPressed({'m', 'M'}, event)) {
-                activeTab = PromptWin;
+                activeTab = TabIndex::Prompt;
                 savedChar = 'm';
                 inputMsg = "";
                 return true;
             }
 
             if (OneOfKeysPressed({'r', 'R'}, event)) {
-                activeTab = PromptWin;
+                activeTab = TabIndex::Prompt;
                 savedChar = 'r';
                 inputMsg = "";
                 return true;
@@ -311,7 +324,7 @@ int main(int argc, char** argv) {
                     msgOrWarning.SetWarning("Not empty folders deletion is not supported for now");
                     return true;
                 }
-                activeTab = PopupWin;
+                activeTab = TabIndex::Popup;
                 return true;
             }
         } else {
@@ -335,12 +348,12 @@ int main(int argc, char** argv) {
                 dirEntries.erase(dirEntries.begin() + selected);
                 sizeEntries.erase(sizeEntries.begin() + selected);
                 msgOrWarning.SetMsg("Successfully deleted entry");
-                activeTab = BrowserWin;
+                activeTab = TabIndex::Browser;
                 return true;
             }
 
             if (OneOfKeysPressed({'n', 'N'}, event)) {
-                activeTab = BrowserWin;
+                activeTab = TabIndex::Browser;
                 return true;
             }
             return false;

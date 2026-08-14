@@ -1,5 +1,6 @@
 #include <string>
 #include <optional>
+#include <filesystem>
 
 #include <ftxui/component/component.hpp>
 #include <ftxui/component/component_options.hpp>
@@ -11,6 +12,8 @@
 #include "ftxui/dom/node.hpp"
 
 using namespace ftxui;
+
+namespace fs = std::filesystem;
 
 bool KeyPressed(char, Event);
 bool OneOfKeysPressed(const std::vector<char>&, Event);
@@ -55,3 +58,5 @@ public:
         return text(buf_.value()) | color(isMsg_ ? Color::PaleGreen1 : Color::PaleVioletRed1);
     }
 };
+
+Elements renderContent(const fs::path& path);

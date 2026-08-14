@@ -51,3 +51,7 @@ Element RenderMultiLine(const std::string& textStr) {
     
     return vbox(std::move(lines));
 }
+
+Elements renderContent(const fs::path& path) {
+    return {};
+}

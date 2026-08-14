@@ -1,6 +1,6 @@
 .PHONY: run-linux run-mac
 
-LINK_FLAGS = -lftxui-component -lftxui-dom -lftxui-screen
+LINK_FLAGS = $(shell pkg-config --cflags --libs chafa ftxui libmagic)
 INCLUDES = -I./src
 CXX_FLAGS = -std=c++20 -o build/app
 OS = $(shell uname -s)

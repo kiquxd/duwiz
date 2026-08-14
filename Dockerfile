@@ -2,6 +2,7 @@ FROM debian:stable-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    pkg-config \
     cmake \
     gdb \
     clang \
@@ -10,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     neovim \
     clangd \
     libftxui-dev \
+    libmagic-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
