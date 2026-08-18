@@ -25,10 +25,10 @@ using namespace ftxui;
 namespace fs = std::filesystem;
 
 constexpr size_t MIN_DIR_ENTRY_LEN = 36;
-constexpr size_t MAX_DIR_ENTRY_LEN = 72;
 
 constexpr size_t MIN_SIZE_ENTRY_LEN = 12;
-constexpr size_t MAX_SIZE_ENTRY_LEN = 24;
+
+constexpr size_t MIN_STATUS_LEN = 24;
 
 enum TabIndex : int {
     Browser = 0,
@@ -73,6 +73,7 @@ int main(int argc, char** argv) {
 
     std::vector<std::string> dirEntries, fullPathEntries;
     std::vector<std::string> sizeEntries;
+    std::string loadingStatus;
 
     auto updateEntries = [&] {
         if (activeSession) {
@@ -193,7 +194,9 @@ int main(int argc, char** argv) {
 
         updateEntries();
 
-        fileType = getFileType(fullPathEntries[selected]);
+        if (!fullPathEntries.empty()) {
+            fileType = getFileType(fullPathEntries[0]);
+        }
     };
 
     auto undoCd = [&] {
@@ -269,7 +272,6 @@ int main(int argc, char** argv) {
 
     auto menuOption = MenuOption();
     menuOption.on_enter = doCd;
-
     menuOption.entries_option.transform = [&](const EntryState& state) {
         Element e;
         if (state.active) {
@@ -308,7 +310,11 @@ int main(int argc, char** argv) {
                     text(fileType) | center
                 }) | xflex
             }) | frame | border,
-            text("$ " + path.string()) | bold | color(Color::LightSlateGrey),
+            hbox({
+                text("$ " + path.string()) | bold | color(Color::LightSlateGrey),
+                filler(),
+                text(loadingStatus) | color(Color::LightSlateGrey)
+            }),
             msgOrWarning.Render()
         });
     });
@@ -369,7 +375,7 @@ int main(int argc, char** argv) {
         }
 
         for (auto& update : updates) {
-            if (update.generation != activeSession->generation | update.index >= sizeEntries.size()) {
+            if (update.generation != activeSession->generation || update.index >= sizeEntries.size()) {
                 continue;
             }
 
@@ -379,6 +385,11 @@ int main(int argc, char** argv) {
                 sizeEntries[update.index] = "<error>";
             }
         }
+        loadingStatus = formatEntryStatus(
+            activeSession->finishedEntries.load(),
+            activeSession->directEntries.size(),
+            activeSession->totalSize.load()
+        );
     };
 
     auto eventHandler = CatchEvent(finalRenderer, [&](Event event) {

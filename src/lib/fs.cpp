@@ -167,6 +167,13 @@ std::string formatEntrySize(size_t size) {
     return std::format("{:.1f}", res) + ' ' + suffix[index];
 }
 
+std::string formatEntryStatus(size_t doneDirs, size_t totalDirs, size_t curSize) {
+    if (doneDirs == totalDirs) {
+        return "finished • size: " + formatEntrySize(curSize);
+    }
+    return "loading " + std::to_string(doneDirs) + " / " + std::to_string(totalDirs) + " • partial: " + formatEntrySize(curSize);
+}
+
 CreateResult touch(const fs::path& path, std::string name) {
     std::string fullPath(path.string() + "/" + name);
     if (fs::exists(fullPath)) {

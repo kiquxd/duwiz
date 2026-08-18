@@ -83,7 +83,7 @@ struct SizeUpdate {
 struct ScanSession {
     std::stop_source stopSource;
     size_t generation{0};
-    std::atomic<int64_t> nextIndex{-1};
+    std::atomic<int64_t> nextIndex{0};
     std::atomic<size_t> readyEntries{0};
     std::atomic<size_t> finishedEntries{0};
     std::atomic<size_t> totalSize{0};
@@ -109,6 +109,7 @@ public:
 };
 
 std::string formatEntrySize(size_t size);
+std::string formatEntryStatus(size_t doneDirs, size_t totalDirs, size_t curSize);
 
 enum class CreateResult {
     AlreadyExists, OpenOrCreateErr, Ok
