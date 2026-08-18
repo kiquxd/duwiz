@@ -1,9 +1,7 @@
-#include "lib/dir_iter.h"
+#include "lib/fs.h"
 #include "lib/thread_pool.h"
 #include "lib/singleton.h"
 #include "lib/argparser.h"
-#include "lib/dir_tools.h"
-#include "tui/fs_utils.h"
 #include "tui/utils.h"
 
 #include <ftxui/component/component.hpp>
@@ -26,8 +24,8 @@
 using namespace ftxui;
 namespace fs = std::filesystem;
 
-constexpr size_t MIN_DIR_ENTRY_LEN = 24;
-constexpr size_t MAX_DIR_ENTRY_LEN = 48;
+constexpr size_t MIN_DIR_ENTRY_LEN = 36;
+constexpr size_t MAX_DIR_ENTRY_LEN = 72;
 
 constexpr size_t MIN_SIZE_ENTRY_LEN = 12;
 constexpr size_t MAX_SIZE_ENTRY_LEN = 24;
@@ -45,6 +43,22 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    auto screen = ScreenInteractive::Fullscreen();
+
+    int selected = 0;
+    std::string fileType;
+
+    int activeTab = TabIndex::Browser;
+    std::string inputMsg;
+    char savedChar;
+
+    std::shared_ptr<ScanSession> activeSession;
+    uint64_t nextGeneration = 0;
+
+    std::mutex mutex;
+    std::vector<SizeUpdate> pendingSizeUpdates;
+    bool customEventQueued = false;
+
     size_t num_threads = config.threads;
     fs::path path = config.path;
 
@@ -61,33 +75,107 @@ int main(int argc, char** argv) {
     std::vector<std::string> sizeEntries;
 
     auto updateEntries = [&] {
-        DirectoryIterator iter(path);
-        sizeEntries.clear();
-        dirEntries.clear();
-        fullPathEntries.clear();
-        iter.AsyncSizeUpdate();
-
-        auto& cacher = Singleton<Cacher>::Instance().GetObj();
-
-        for (auto& subdirIter : iter.GetSubdirs()) {
-            std::string fullPath = subdirIter.path;
-            fullPathEntries.push_back(fullPath);
-            size_t pos = fullPath.rfind("/");
-            std::string shortPath = fullPath.substr(pos + 1);
-            size_t dirSize = cacher.GetCachedSize(fullPath);
-            auto sizeEntry = formatEntrySize(dirSize);
-            dirEntries.push_back(std::move(shortPath));
-            sizeEntries.push_back(std::move(sizeEntry));
+        if (activeSession) {
+            activeSession->stopSource.request_stop();
         }
 
-        msgOrWarning.Reset();
+        dirEntries.clear();
+        fullPathEntries.clear();
+        sizeEntries.clear();
+
+        std::vector<fs::path> directEntries;
+
+        std::error_code ec;
+        fs::directory_iterator it(
+            path,
+            fs::directory_options::skip_permission_denied,
+            ec
+        );
+        const fs::directory_iterator end;
+
+        while (!ec && it != end) {
+            const fs::directory_entry entry = *it;
+            const fs::path entryPath = entry.path();
+
+            directEntries.push_back(entryPath);
+            fullPathEntries.push_back(entryPath.string());
+            dirEntries.push_back(entryPath.filename().string());
+
+            sizeEntries.push_back("...");
+
+            it.increment(ec);
+        }
+
+        if (ec) {
+            msgOrWarning.SetWarning("Failed to read directory");
+        }
+
+        selected = 0;
+
+        auto session = std::make_shared<ScanSession>(
+            ++nextGeneration,
+            std::move(directEntries)
+        );
+        activeSession = session;
+
+        if (session->directEntries.empty()) {
+            return;
+        }
+
+        const size_t workerCount = std::min(num_threads, session->directEntries.size());
+
+        auto& pool = FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
+
+        for (size_t i = 0; i < workerCount; ++i) {
+            pool.Submit([session, &screen, &pendingSizeUpdates, &mutex, &customEventQueued] {
+                const std::stop_token token = session->stopSource.get_token();
+
+                while (!token.stop_requested()) {
+                    const size_t index = session->nextIndex.fetch_add(1);
+
+                    if (index >= session->directEntries.size()) {
+                        return;
+                    }
+
+                    DirectoryIterator iter(
+                        session->directEntries[index]
+                    );
+                    ScanResult result = iter.SyncSizeUpdate(token);
+
+                    if (token.stop_requested() || !result.IsReady()) {
+                        return;
+                    }
+
+                    session->finishedEntries.fetch_add(1);
+
+                    if (result.IsReady()) {
+                        session->totalSize.fetch_add(result.Get());
+                        session->readyEntries.fetch_add(1);
+                    }
+
+                    bool postEvent = false;
+                    {
+                        std::lock_guard guard(mutex);
+
+                        pendingSizeUpdates.push_back({
+                            .generation = session->generation,
+                            .index = index,
+                            .result = std::move(result),
+                        });
+
+                        if (!customEventQueued) {
+                            customEventQueued = true;
+                            postEvent = true;
+                        }
+                    }
+
+                    if (postEvent) {
+                        screen.PostEvent(Event::Custom);
+                    }
+                }
+            });
+        }
     };
-
-    int selected = 0;
-
-    int activeTab = TabIndex::Browser;
-    std::string inputMsg;
-    char savedChar;
 
     auto doCd = [&] {
         if (fullPathEntries.size() <= selected) {
@@ -104,6 +192,8 @@ int main(int argc, char** argv) {
         getPrevSelectedByPath[path] = selected;
 
         updateEntries();
+
+        fileType = getFileType(fullPathEntries[selected]);
     };
 
     auto undoCd = [&] {
@@ -112,6 +202,8 @@ int main(int argc, char** argv) {
         updateEntries();
 
         selected = getPrevSelectedByPath[next];
+
+        fileType = getFileType(fullPathEntries[selected]);
     };
 
     auto onSubmit = [&] {
@@ -174,7 +266,6 @@ int main(int argc, char** argv) {
     };
 
     Elements filePreview;
-    std::string fileType;
 
     auto menuOption = MenuOption();
     menuOption.on_enter = doCd;
@@ -183,7 +274,6 @@ int main(int argc, char** argv) {
         Element e;
         if (state.active) {
             e = text(state.label) | bold | color(Color::Black) | bgcolor(Color::LightSlateGrey);
-            fileType = getFileType(fullPathEntries[selected]);
         } else {
             if (fs::is_directory(path.string() + "/" + state.label)) {
                 e = text(state.label) | color(Color::Blue);
@@ -211,7 +301,7 @@ int main(int argc, char** argv) {
             text("--- Dir List ---") | bold | color(Color::Blue),
             hbox({
                 dirMenu->Render() | size(WIDTH, GREATER_THAN, MIN_DIR_ENTRY_LEN),
-                sizeMenu->Render() | size(WIDTH, GREATER_THAN, MIN_SIZE_ENTRY_LEN),
+                sizeMenu->Render() | size(WIDTH, GREATER_THAN, MIN_SIZE_ENTRY_LEN) | align_right,
                 separator(),
                 vbox({
                     vbox(std::move(filePreview)),
@@ -222,8 +312,6 @@ int main(int argc, char** argv) {
             msgOrWarning.Render()
         });
     });
-
-    auto screen = ScreenInteractive::Fullscreen();
 
     auto inputField = Input(&inputMsg);
 
@@ -267,7 +355,38 @@ int main(int argc, char** argv) {
         return mainRenderer->Render();
     });
 
+    auto applySizeUpdates = [&] {
+        std::vector<SizeUpdate> updates;
+
+        {
+            std::lock_guard guard(mutex);
+            updates.swap(pendingSizeUpdates);
+            customEventQueued = false;
+        }
+
+        if (!activeSession) {
+            return;
+        }
+
+        for (auto& update : updates) {
+            if (update.generation != activeSession->generation | update.index >= sizeEntries.size()) {
+                continue;
+            }
+
+            if (update.result.IsReady()) {
+                sizeEntries[update.index] = formatEntrySize(update.result.Get());
+            } else {
+                sizeEntries[update.index] = "<error>";
+            }
+        }
+    };
+
     auto eventHandler = CatchEvent(finalRenderer, [&](Event event) {
+        if (event == Event::Custom) {
+            applySizeUpdates();
+            return true;
+        }
+
         if (activeTab == TabIndex::Prompt) {
             if (event == Event::Return) {
                 onSubmit();
@@ -295,6 +414,10 @@ int main(int argc, char** argv) {
             if (event == Event::ArrowRight) {
                 doCd();
                 return true;
+            }
+
+            if (event == Event::ArrowDown || event == Event::ArrowUp) {
+                fileType = getFileType(fullPathEntries[selected]);
             }
 
             if (OneOfKeysPressed({'c', 'C'}, event)) {

@@ -1,4 +1,6 @@
-.PHONY: run-linux run-mac
+.PHONY: all run
+
+all: run
 
 LINK_FLAGS = $(shell pkg-config --cflags --libs chafa ftxui libmagic)
 INCLUDES = -I./src
