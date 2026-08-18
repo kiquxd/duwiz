@@ -197,6 +197,8 @@ int main(int argc, char** argv) {
         if (!fullPathEntries.empty()) {
             fileType = getFileType(fullPathEntries[0]);
         }
+
+        loadingStatus = "";
     };
 
     auto undoCd = [&] {
@@ -206,7 +208,11 @@ int main(int argc, char** argv) {
 
         selected = getPrevSelectedByPath[next];
 
-        fileType = getFileType(fullPathEntries[selected]);
+        if (fullPathEntries.size() > selected) {
+            fileType = getFileType(fullPathEntries[selected]);
+        }
+
+        loadingStatus = "";
     };
 
     auto onSubmit = [&] {
