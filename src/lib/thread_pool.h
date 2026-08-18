@@ -63,16 +63,8 @@ public:
     }
 
     template <typename F>
-    auto Submit(F&& function) -> std::future<std::invoke_result_t<F>> {
-        using Result = std::invoke_result_t<F>;
-        auto task = std::make_shared<std::packaged_task<Result()>>(
-            std::forward<F>(function)
-        );
-        auto future = task->get_future();
-        queue_.Push([task] {
-            (*task)();
-        });
-        return future;
+    void Submit(F&& function) {
+        queue_.Push(std::move(function));
     }
 
     void Start();

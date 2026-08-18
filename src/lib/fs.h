@@ -27,15 +27,14 @@ private:
 
     std::optional<size_t> IsFileOrCached();
 
-    template <typename Callable, typename Int>
-    void TraverseDirectory(Callable&& callback, Int& totalSize);
 };
 
 struct ScanResult {
 private:
     enum class ScanResultEnum {
         Ready,
-        Cancelled
+        Cancelled,
+        Error
     };
 
     size_t size;
@@ -56,6 +55,10 @@ public:
         return result == ScanResultEnum::Ready;
     }
 
+    bool IsCancelled() {
+        return result == ScanResultEnum::Cancelled;
+    }
+
     size_t Get() {
         if (result == ScanResultEnum::Ready) {
             return size;
@@ -70,7 +73,15 @@ public:
     }
 
     static ScanResult Cancelled() {
-        return ScanResult();
+        auto res = ScanResult();
+        res.result = ScanResultEnum::Cancelled;
+        return res;
+    }
+
+    static ScanResult Error() {
+        auto res = ScanResult();
+        res.result = ScanResultEnum::Error;
+        return res;
     }
 };
 

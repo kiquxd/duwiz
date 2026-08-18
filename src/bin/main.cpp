@@ -24,7 +24,7 @@
 using namespace ftxui;
 namespace fs = std::filesystem;
 
-constexpr size_t MIN_DIR_ENTRY_LEN = 36;
+constexpr size_t MIN_DIR_ENTRY_LEN = 48;
 
 constexpr size_t MIN_SIZE_ENTRY_LEN = 12;
 
@@ -143,7 +143,7 @@ int main(int argc, char** argv) {
                     );
                     ScanResult result = iter.SyncSizeUpdate(token);
 
-                    if (token.stop_requested() || !result.IsReady()) {
+                    if (token.stop_requested() || result.IsCancelled()) {
                         return;
                     }
 

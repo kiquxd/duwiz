@@ -15,33 +15,6 @@ DirectoryIterator::DirectoryIterator(const std::string& path)
     : path(path) {
 }
 
-template <typename Callable, typename Int>
-void DirectoryIterator::TraverseDirectory(Callable&& callback, Int& totalSize) {
-    std::error_code ec;
-    fs::directory_iterator iter(path, ec);
-    if (ec) {
-        return;
-    }
-
-    for (auto entry: iter) {
-        if (fs::is_symlink(entry.path())) {
-            continue;
-        }
-
-        if (entry.is_directory()) {
-            callback(entry);
-        } else {
-            size_t entrySize;
-            try {
-                entrySize = entry.file_size();
-            } catch (...) {
-                entrySize = 0;
-            }
-            totalSize += entrySize;
-        }
-    }
-}
-
 std::optional<size_t> DirectoryIterator::IsFileOrCached() {
     auto& cacher = Singleton<Cacher>::Instance().GetObj();
     if (cacher.IsCached(path)) {
@@ -62,7 +35,7 @@ std::optional<size_t> DirectoryIterator::IsFileOrCached() {
     std::error_code ec;
     fs::directory_iterator iter(path, ec);
     if (ec) {
-        return ScanResult::Ready(0);
+        return ScanResult::Error();
     }
 
     for (auto entry: iter) {
@@ -70,16 +43,19 @@ std::optional<size_t> DirectoryIterator::IsFileOrCached() {
             return ScanResult::Cancelled();
         }
 
-        if (fs::is_symlink(entry.path())) {
+        if (entry.is_symlink(ec)) {
             continue;
         }
+        if (ec) {
+            return ScanResult::Error();
+        }
 
-        if (entry.is_directory()) {
+        if (entry.is_directory(ec)) {
             DirectoryIterator subdirIter(entry.path());
             auto res = subdirIter.SyncSizeUpdate(token);
             if (res.IsReady()) {
                 totalSize += res.Get();
-            } else {
+            } else if (res.IsCancelled()) {
                 return ScanResult::Cancelled();
             }
         } else {
@@ -90,6 +66,10 @@ std::optional<size_t> DirectoryIterator::IsFileOrCached() {
                 entrySize = 0;
             }
             totalSize += entrySize;
+        }
+
+        if (ec) {
+            return ScanResult::Error();
         }
     }
 
@@ -109,12 +89,15 @@ std::vector<DirectoryIterator> DirectoryIterator::GetSubdirs() const {
 }
 
 bool Cacher::IsCached(const fs::path& path) {
-    if (fs::is_symlink(path)) {
-        return true;
-    }
-    if (!fs::is_directory(path)) {
-        return true;
-    }
+    try {
+        if (fs::is_symlink(path)) {
+            return true;
+        }
+        if (!fs::is_directory(path)) {
+            return true;
+        }
+    } catch (...) {}
+
     std::lock_guard guard(mutex);
 
     return sizes.contains(path);
@@ -123,12 +106,14 @@ bool Cacher::IsCached(const fs::path& path) {
 size_t Cacher::GetCachedSize(const fs::path& path) {
     assert(IsCached(path));
 
-    if (fs::is_symlink(path)) {
-        return 0;
-    }
-    if (!fs::is_directory(path)) {
-        return fs::file_size(path);
-    }
+    try {
+        if (fs::is_symlink(path)) {
+            return 0;
+        }
+        if (!fs::is_directory(path)) {
+            return fs::file_size(path);
+        }
+    } catch (...) {}
 
     std::lock_guard guard(mutex);
 
@@ -156,15 +141,14 @@ std::string formatEntrySize(size_t size) {
     if (size < 1024) {
         return std::to_string(size) + " bytes";
     }
-    size *= 10;
+    double outRes = static_cast<double>(size);
     std::vector<std::string> suffix = {"bytes", "Kb", "Mb", "GiB", "Tb"};
     size_t index = 0;
-    while (size >= 1024) {
-        size /= 1024;
+    while (outRes >= 1024) {
+        outRes /= 1024;
         ++index;
     }
-    double res = static_cast<double>(size) / 10;
-    return std::format("{:.1f}", res) + ' ' + suffix[index];
+    return std::format("{:.1f}", outRes) + ' ' + suffix[index];
 }
 
 std::string formatEntryStatus(size_t doneDirs, size_t totalDirs, size_t curSize) {
