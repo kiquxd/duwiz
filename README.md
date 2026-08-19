@@ -66,8 +66,9 @@ git submodule update --init --recursive
 make run
 ```
 
-`make run` keeps its historical name: it configures, builds, and tests, but does
-not launch the fullscreen application. Bootstrap downloads only the pinned
+`make run` keeps its historical name: it configures and builds, but does not
+launch the fullscreen application. Run `make test` when you also want the test
+suite. Bootstrap downloads only the pinned
 FTXUI checkout; the preview library's stb headers are already vendored.
 `scripts/configure.sh` automatically refreshes legacy PDFium-based or relocated
 CMake caches.
@@ -135,8 +136,8 @@ not be started.
 ## Development and tests
 
 ```sh
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+make run
+make test
 ```
 
 To work against a separate library checkout without moving the submodule pin:
