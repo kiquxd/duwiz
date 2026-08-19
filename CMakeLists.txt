@@ -37,6 +37,7 @@ add_executable(ya-ncdu
   src/lib/argparser.cpp
   src/lib/fs.cpp
   src/lib/preview_service.cpp
+  src/lib/system_opener.cpp
   src/lib/thread_pool.cpp
   src/tui/preview_view.cpp
   src/tui/utils.cpp)

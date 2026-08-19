@@ -3,6 +3,7 @@
 #include "lib/singleton.h"
 #include "lib/argparser.h"
 #include "lib/preview_service.h"
+#include "lib/system_opener.h"
 #include "tui/preview_view.h"
 #include "tui/utils.h"
 
@@ -16,6 +17,7 @@
 #include <ftxui/dom/node.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
@@ -46,6 +48,7 @@ int main(int argc, char** argv) {
 
     int selected = 0;
     int activeTab = TabIndex::Browser;
+    bool previewFullscreen = false;
     std::string inputMsg;
     char savedChar;
 
@@ -81,9 +84,13 @@ int main(int argc, char** argv) {
             previewService.Clear();
             return;
         }
-        const int availableColumns = screen.dimx() -
-            static_cast<int>(MIN_DIR_ENTRY_LEN + MIN_SIZE_ENTRY_LEN + 6);
-        const int availableRows = screen.dimy() - 12;
+        const int availableColumns = previewFullscreen
+            ? screen.dimx() - 4
+            : screen.dimx() - static_cast<int>(MIN_DIR_ENTRY_LEN +
+                                                MIN_SIZE_ENTRY_LEN + 6);
+        const int availableRows = previewFullscreen
+            ? screen.dimy() - 6
+            : screen.dimy() - 12;
         previewService.Request(
             fullPathEntries[static_cast<size_t>(selected)],
             static_cast<std::uint32_t>(std::max(20, availableColumns)),
@@ -376,6 +383,13 @@ int main(int argc, char** argv) {
                 popupRenderer->Render() | clear_under | center
             });
         }
+        if (previewFullscreen) {
+            return vbox({
+                RenderPreview(previewService.Snapshot()) | flex,
+                separator(),
+                text("p / Esc: close preview") | color(Color::LightSlateGrey)
+            }) | border;
+        }
         return mainRenderer->Render();
     });
 
@@ -432,6 +446,51 @@ int main(int argc, char** argv) {
                 screen.Exit();
                 auto& pool = FirstInitSingleton<runtime::ThreadPool>::Instance().GetObj();
                 pool.Stop();
+                return true;
+            }
+
+            if (previewFullscreen &&
+                (event == Event::Escape || OneOfKeysPressed({'p', 'P'}, event))) {
+                previewFullscreen = false;
+                requestPreview();
+                return true;
+            }
+
+            if (previewFullscreen) {
+                return true;
+            }
+
+            if (OneOfKeysPressed({'p', 'P'}, event)) {
+                previewFullscreen = true;
+                requestPreview();
+                return true;
+            }
+
+            if (OneOfKeysPressed({'o', 'O'}, event)) {
+                if (selected < 0 ||
+                    static_cast<size_t>(selected) >= fullPathEntries.size()) {
+                    msgOrWarning.SetWarning("No file selected");
+                    return true;
+                }
+                const fs::path selectedPath =
+                    fullPathEntries[static_cast<size_t>(selected)];
+                std::string extension = selectedPath.extension().string();
+                std::transform(extension.begin(), extension.end(), extension.begin(),
+                               [](unsigned char ch) {
+                                   return static_cast<char>(std::tolower(ch));
+                               });
+                std::error_code statusError;
+                if (extension != ".pdf" ||
+                    !fs::is_regular_file(selectedPath, statusError)) {
+                    msgOrWarning.SetWarning("System viewer is available for PDF files");
+                    return true;
+                }
+                const auto opened = OpenWithSystemViewer(selectedPath);
+                if (opened.ok) {
+                    msgOrWarning.SetMsg("Opened PDF in the system viewer");
+                } else {
+                    msgOrWarning.SetWarning(opened.error);
+                }
                 return true;
             }
 

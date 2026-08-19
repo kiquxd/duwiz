@@ -8,12 +8,10 @@ NC='\033[0m' # no color
 set -euo pipefail
 
 install_macos() {
-    if ! command -v xcodebuild >/dev/null 2>&1 ||
-       ! xcodebuild -version >/dev/null 2>&1; then
-        printf "${RED}ERROR: full Xcode with an active macOS SDK is required.\n" >&2
-        printf "Install Xcode, then run:\n" >&2
-        printf "  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer\n" >&2
-        printf "  sudo xcodebuild -runFirstLaunch\n" >&2
+    if ! command -v xcrun >/dev/null 2>&1 ||
+       ! xcrun --find clang++ >/dev/null 2>&1; then
+        printf "${RED}ERROR: Apple Command Line Tools are required.\n" >&2
+        printf "Install them with: xcode-select --install\n" >&2
         exit 1
     fi
 
@@ -39,19 +37,19 @@ install_linux() {
     if command -v apt-get >/dev/null 2>&1; then
         "${SUDO[@]}" apt-get update
         "${SUDO[@]}" apt-get install -y \
-            build-essential ca-certificates cmake curl git libfontconfig1 python3 xz-utils
+            build-essential ca-certificates cmake git xdg-utils
     elif command -v dnf >/dev/null 2>&1; then
         "${SUDO[@]}" dnf install -y \
-            ca-certificates cmake curl fontconfig gcc-c++ git python3 xz
+            ca-certificates cmake gcc-c++ git xdg-utils
     elif command -v pacman >/dev/null 2>&1; then
         "${SUDO[@]}" pacman -Syu --needed --noconfirm \
-            base-devel ca-certificates cmake curl fontconfig git python xz
+            base-devel ca-certificates cmake git xdg-utils
     elif command -v zypper >/dev/null 2>&1; then
         "${SUDO[@]}" zypper --non-interactive install \
-            ca-certificates cmake curl fontconfig gcc-c++ git python3 xz
+            ca-certificates cmake gcc-c++ git xdg-utils
     elif command -v apk >/dev/null 2>&1; then
         "${SUDO[@]}" apk add \
-            build-base ca-certificates cmake curl fontconfig git python3 xz
+            build-base ca-certificates cmake git xdg-utils
     else
         printf "${RED}ERROR: unsupported package manager.\n" >&2
         printf "${RED}Supported ones: apt, dnf, pacman, zypper, apk.\n" >&2

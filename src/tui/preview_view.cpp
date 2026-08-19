@@ -58,6 +58,47 @@ Element RenderPixels(const preview::PixelPreview& image) {
     return vbox(std::move(rows));
 }
 
+Element StyleSyntax(Element element, preview::SyntaxToken token) {
+    using Token = preview::SyntaxToken;
+    switch (token) {
+        case Token::keyword: return element | color(Color::Magenta) | bold;
+        case Token::type: return element | color(Color::Cyan);
+        case Token::function: return element | color(Color::CornflowerBlue);
+        case Token::string_literal: return element | color(Color::PaleGreen1);
+        case Token::number: return element | color(Color::Yellow);
+        case Token::comment: return element | color(Color::Grey50) | dim;
+        case Token::preprocessor: return element | color(Color::LightSkyBlue1);
+        case Token::property: return element | color(Color::Cyan);
+        case Token::heading: return element | color(Color::Yellow) | bold;
+        case Token::link: return element | color(Color::CornflowerBlue) | underlined;
+        case Token::code_literal: return element | color(Color::PaleGreen1);
+        case Token::operator_symbol: return element | color(Color::LightSlateGrey);
+    }
+    return element;
+}
+
+Element RenderTextLine(const preview::TextLine& line) {
+    Elements parts;
+    std::size_t cursor = 0;
+    for (const auto& style : line.styles) {
+        const auto begin = static_cast<std::size_t>(style.byte_begin);
+        const auto end = static_cast<std::size_t>(style.byte_end);
+        if (begin < cursor || end < begin || end > line.text.size()) {
+            return text(line.text);
+        }
+        if (begin != cursor) {
+            parts.push_back(text(line.text.substr(cursor, begin - cursor)));
+        }
+        parts.push_back(StyleSyntax(text(line.text.substr(begin, end - begin)),
+                                    style.token));
+        cursor = end;
+    }
+    if (cursor != line.text.size()) {
+        parts.push_back(text(line.text.substr(cursor)));
+    }
+    return hbox(std::move(parts));
+}
+
 Element RenderResult(const preview::Preview& result) {
     Elements body;
     body.push_back(text(result.detected_format + " · " + result.detected_mime) |
@@ -71,7 +112,7 @@ Element RenderResult(const preview::Preview& result) {
 
     if (const auto* content = std::get_if<preview::TextPreview>(&result.content)) {
         for (const auto& line : content->lines) {
-            body.push_back(text(line.text));
+            body.push_back(RenderTextLine(line));
         }
         if (content->has_more) {
             body.push_back(text("… more data available") |

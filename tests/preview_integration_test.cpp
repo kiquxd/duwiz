@@ -67,6 +67,15 @@ int main() {
     Require(snapshot->result &&
             std::holds_alternative<preview::TextPreview>(snapshot->result->content),
             "text payload is missing");
+    const auto& text_preview =
+        std::get<preview::TextPreview>(snapshot->result->content);
+    bool has_syntax = false;
+    for (const auto& line : text_preview.lines) {
+        has_syntax = has_syntax || !line.styles.empty();
+    }
+    Require(text_preview.syntax_language == preview::SyntaxLanguage::markdown,
+            "Markdown language was not detected");
+    Require(has_syntax, "Markdown semantic syntax spans are missing");
 
     // The last request must win even when the previous one is still debouncing.
     const auto jpeg_path = corpus / "sample.jpg";
@@ -94,8 +103,9 @@ int main() {
     Require(snapshot->status == PreviewStatus::Ready, "PDF preview is not ready");
     Require(snapshot->result && snapshot->result->detected_format == "pdf",
             "PDF format was not detected");
-    Require(std::holds_alternative<preview::PixelPreview>(snapshot->result->content),
-            "PDF pixel payload is missing");
+    Require(std::holds_alternative<preview::UnsupportedContent>(
+                snapshot->result->content),
+            "PDF must be delegated to the system viewer");
 
     service.Request(corpus, 30, 10);
     snapshot = wait_for_path(corpus);
