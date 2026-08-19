@@ -13,3 +13,4 @@ build
 !CMakeLists.txt
 !*.sh
 !third_party/preview_lib
+YA_NCDU_PREVIEW_ARCHITECTURE.md
