@@ -8,7 +8,7 @@ namespace runtime {
 [[maybe_unused]] std::optional<Task> TaskQueue::PopFront() {
     std::unique_lock lock(mutex_);
     if (queue_.empty() && !stopped_) {
-        non_empty_.wait(lock, [&] { return !queue_.empty() || stopped_; });
+        nonEmpty_.wait(lock, [&] { return !queue_.empty() || stopped_; });
     }
 
     if (queue_.empty()) {
@@ -23,7 +23,7 @@ namespace runtime {
 void TaskQueue::Push(Task task) {
     std::lock_guard guard(mutex_);
     queue_.push(std::move(task));
-    non_empty_.notify_one();
+    nonEmpty_.notify_one();
 }
 
 // ######## Thread Pool ########

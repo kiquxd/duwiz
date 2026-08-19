@@ -8,8 +8,6 @@
 #include <thread>
 #include <vector>
 #include <cassert>
-#include <atomic>
-#include <future>
 
 namespace runtime {
 
@@ -19,7 +17,7 @@ class TaskQueue {
 private:
     mutable std::mutex mutex_;
     std::queue<Task> queue_;
-    std::condition_variable non_empty_;
+    std::condition_variable nonEmpty_;
     bool stopped_ = false;
 
 public:
@@ -44,7 +42,7 @@ public:
     void Close() {
         std::lock_guard guard(mutex_);
         stopped_ = true;
-        non_empty_.notify_all();
+        nonEmpty_.notify_all();
     }
 };
 
