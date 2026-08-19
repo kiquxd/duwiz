@@ -6,7 +6,7 @@ readonly BUILD_DIR="${BUILD_DIR:-${ROOT}/build}"
 readonly PREVIEW_ROOT="${PREVIEW_ROOT:-${ROOT}/third_party/preview_lib}"
 readonly PDFIUM_ROOT="${PREVIEW_ROOT}/.deps/pdfium-work/pdfium"
 cache="${BUILD_DIR}/CMakeCache.txt"
-fresh=()
+fresh=false
 
 case "$(uname -s):$(uname -m)" in
   Linux:x86_64)
@@ -57,13 +57,23 @@ if [[ -f "${cache}" ]]; then
   if [[ "${cached_source}" != "${ROOT}" ||
         "${cached_compiler}" != "${compiler}" ]]; then
     printf 'Refreshing a relocated or incompatible CMake cache.\n'
-    fresh=(--fresh)
+    fresh=true
   fi
 fi
 
-cmake "${fresh[@]}" -S "${ROOT}" -B "${BUILD_DIR}" -G Ninja \
-  -DPREVIEW_ROOT="${PREVIEW_ROOT}" \
-  -DCMAKE_MAKE_PROGRAM="${PDFIUM_ROOT}/third_party/ninja/ninja" \
-  -DCMAKE_C_COMPILER="${PDFIUM_ROOT}/third_party/llvm-build/Release+Asserts/bin/clang" \
-  -DCMAKE_CXX_COMPILER="${compiler}" \
+cmake_args=(
+  -S "${ROOT}"
+  -B "${BUILD_DIR}"
+  -G Ninja
+  -DPREVIEW_ROOT="${PREVIEW_ROOT}"
+  -DCMAKE_MAKE_PROGRAM="${PDFIUM_ROOT}/third_party/ninja/ninja"
+  -DCMAKE_C_COMPILER="${PDFIUM_ROOT}/third_party/llvm-build/Release+Asserts/bin/clang"
+  -DCMAKE_CXX_COMPILER="${compiler}"
   "${platform_args[@]}"
+)
+
+if [[ "${fresh}" == true ]]; then
+  cmake --fresh "${cmake_args[@]}"
+else
+  cmake "${cmake_args[@]}"
+fi
