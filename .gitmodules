@@ -1,0 +1,3 @@
+[submodule "third_party/preview_lib"]
+	path = third_party/preview_lib
+	url = https://github.com/kiquxd/ai-driven_preview-lib.git

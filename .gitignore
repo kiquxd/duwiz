@@ -8,4 +8,7 @@
 !*.md
 !Dockerfile
 build
+.deps/
+!CMakeLists.txt
 !*.sh
+!third_party/preview_lib

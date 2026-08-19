@@ -23,26 +23,26 @@ install_macos() {
     fi
 
     brew update
-    brew install pkg-config ftxui glib chafa libmagic
+    brew install cmake git
 }
 
 install_linux() {
     if command -v apt-get >/dev/null 2>&1; then
         "${SUDO[@]}" apt-get update
         "${SUDO[@]}" apt-get install -y \
-            pkg-config libftxui-dev libglib2.0-dev libchafa-dev libmagic-dev
+            build-essential cmake git
     elif command -v dnf >/dev/null 2>&1; then
         "${SUDO[@]}" dnf install -y \
-            pkgconf-pkg-config ftxui-devel glib2-devel chafa-devel file-devel
+            gcc-c++ cmake git
     elif command -v pacman >/dev/null 2>&1; then
         "${SUDO[@]}" pacman -Syu --needed --noconfirm \
-            pkgconf ftxui glib2 chafa file
+            base-devel cmake git
     elif command -v zypper >/dev/null 2>&1; then
         "${SUDO[@]}" zypper --non-interactive install \
-            pkg-config ftxui-devel glib2-devel chafa-devel file-devel
+            gcc-c++ cmake git
     elif command -v apk >/dev/null 2>&1; then
         "${SUDO[@]}" apk add \
-            pkgconf ftxui-dev glib-dev chafa-dev file-dev
+            build-base cmake git
     else
         printf "${RED}ERROR: unsupported package manager.\n" >&2
         printf "${RED}Supported ones: apt, dnf, pacman, zypper, apk.\n" >&2

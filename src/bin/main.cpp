@@ -2,6 +2,8 @@
 #include "lib/thread_pool.h"
 #include "lib/singleton.h"
 #include "lib/argparser.h"
+#include "lib/preview_service.h"
+#include "tui/preview_view.h"
 #include "tui/utils.h"
 
 #include <ftxui/component/component.hpp>
@@ -13,8 +15,7 @@
 #include <ftxui/screen/screen.hpp>
 #include <ftxui/dom/node.hpp>
 
-#include <chafa/chafa.h>
-
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <unordered_map>
@@ -27,8 +28,6 @@ namespace fs = std::filesystem;
 constexpr size_t MIN_DIR_ENTRY_LEN = 48;
 
 constexpr size_t MIN_SIZE_ENTRY_LEN = 12;
-
-constexpr size_t MIN_STATUS_LEN = 24;
 
 enum TabIndex : int {
     Browser = 0,
@@ -46,8 +45,6 @@ int main(int argc, char** argv) {
     auto screen = ScreenInteractive::Fullscreen();
 
     int selected = 0;
-    std::string fileType;
-
     int activeTab = TabIndex::Browser;
     std::string inputMsg;
     char savedChar;
@@ -74,6 +71,25 @@ int main(int argc, char** argv) {
     std::vector<std::string> dirEntries, fullPathEntries;
     std::vector<std::string> sizeEntries;
     std::string loadingStatus;
+
+    PreviewService previewService([&screen] {
+        screen.PostEvent(Event::Custom);
+    });
+
+    auto requestPreview = [&] {
+        if (selected < 0 || static_cast<size_t>(selected) >= fullPathEntries.size()) {
+            previewService.Clear();
+            return;
+        }
+        const int availableColumns = screen.dimx() -
+            static_cast<int>(MIN_DIR_ENTRY_LEN + MIN_SIZE_ENTRY_LEN + 6);
+        const int availableRows = screen.dimy() - 12;
+        previewService.Request(
+            fullPathEntries[static_cast<size_t>(selected)],
+            static_cast<std::uint32_t>(std::max(20, availableColumns)),
+            static_cast<std::uint32_t>(std::max(4, availableRows))
+        );
+    };
 
     auto updateEntries = [&] {
         if (activeSession) {
@@ -112,6 +128,7 @@ int main(int argc, char** argv) {
         }
 
         selected = 0;
+        requestPreview();
 
         auto session = std::make_shared<ScanSession>(
             ++nextGeneration,
@@ -179,7 +196,8 @@ int main(int argc, char** argv) {
     };
 
     auto doCd = [&] {
-        if (fullPathEntries.size() <= selected) {
+        if (selected < 0 ||
+            static_cast<size_t>(selected) >= fullPathEntries.size()) {
             msgOrWarning.SetWarning("Selected index out of range");
             return;
         }
@@ -194,10 +212,6 @@ int main(int argc, char** argv) {
 
         updateEntries();
 
-        if (!fullPathEntries.empty()) {
-            fileType = getFileType(fullPathEntries[0]);
-        }
-
         loadingStatus = "";
     };
 
@@ -207,10 +221,11 @@ int main(int argc, char** argv) {
         updateEntries();
 
         selected = getPrevSelectedByPath[next];
-
-        if (fullPathEntries.size() > selected) {
-            fileType = getFileType(fullPathEntries[selected]);
+        if (!fullPathEntries.empty()) {
+            selected = std::min<int>(selected,
+                                     static_cast<int>(fullPathEntries.size() - 1));
         }
+        requestPreview();
 
         loadingStatus = "";
     };
@@ -232,6 +247,7 @@ int main(int argc, char** argv) {
 
                     dirEntries[selected] = inputMsg;
                     fullPathEntries[selected] = toPath;
+                    requestPreview();
                 } else {
                     assert(false && "Shouldn't happen (entry should be cached)");
                 }
@@ -274,10 +290,9 @@ int main(int argc, char** argv) {
         return false;
     };
 
-    Elements filePreview;
-
     auto menuOption = MenuOption();
     menuOption.on_enter = doCd;
+    menuOption.on_change = requestPreview;
     menuOption.entries_option.transform = [&](const EntryState& state) {
         Element e;
         if (state.active) {
@@ -311,10 +326,7 @@ int main(int argc, char** argv) {
                 dirMenu->Render() | size(WIDTH, GREATER_THAN, MIN_DIR_ENTRY_LEN),
                 sizeMenu->Render() | size(WIDTH, GREATER_THAN, MIN_SIZE_ENTRY_LEN) | align_right,
                 separator(),
-                vbox({
-                    vbox(std::move(filePreview)),
-                    text(fileType) | center
-                }) | xflex
+                RenderPreview(previewService.Snapshot()) | xflex
             }) | frame | border,
             hbox({
                 text("$ " + path.string()) | bold | color(Color::LightSlateGrey),
@@ -433,10 +445,6 @@ int main(int argc, char** argv) {
                 return true;
             }
 
-            if (event == Event::ArrowDown || event == Event::ArrowUp) {
-                fileType = getFileType(fullPathEntries[selected]);
-            }
-
             if (OneOfKeysPressed({'c', 'C'}, event)) {
                 activeTab = TabIndex::Prompt;
                 savedChar = 'c';
@@ -487,6 +495,11 @@ int main(int argc, char** argv) {
                 fullPathEntries.erase(fullPathEntries.begin() + selected);
                 dirEntries.erase(dirEntries.begin() + selected);
                 sizeEntries.erase(sizeEntries.begin() + selected);
+                if (!fullPathEntries.empty()) {
+                    selected = std::min<int>(selected,
+                        static_cast<int>(fullPathEntries.size() - 1));
+                }
+                requestPreview();
                 msgOrWarning.SetMsg("Successfully deleted entry");
                 activeTab = TabIndex::Browser;
                 return true;

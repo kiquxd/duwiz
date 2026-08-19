@@ -16,14 +16,12 @@ bool OneOfKeysPressed(const std::vector<char>& chars, Event event) {
 void printHelpWindow(const std::string& binary) {
     auto screen = Screen::Create(Dimension::Full());
 
-    std::string errorMsg = std::format(
-        "Usage: {} [options]\n"
+    std::string errorMsg =
+        "Usage: " + binary + " [options]\n"
             "Options: \n"
             "  --help (-h)   Show this screen and exit\n"
             "  --path <path> Specify path from which ya-ncdu should start\n"
-            "  -j <threads>  Max parallel jobs/tasks that can be running",
-            binary
-    );
+            "  -j <threads>  Max parallel jobs/tasks that can be running";
 
     auto document = vbox({
             filler(),
@@ -50,8 +48,4 @@ Element RenderMultiLine(const std::string& textStr) {
     }
     
     return vbox(std::move(lines));
-}
-
-Elements renderContent(const fs::path& path) {
-    return {};
 }

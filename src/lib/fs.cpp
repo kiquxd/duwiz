@@ -3,13 +3,12 @@
 #include <filesystem>
 #include <stop_token>
 #include <system_error>
-#include <format>
+#include <iomanip>
+#include <sstream>
 #include <vector>
 #include <fstream>
 
-#include <iostream>
 #include <string>
-#include <magic.h>
 
 DirectoryIterator::DirectoryIterator(const std::string& path)
     : path(path) {
@@ -148,7 +147,10 @@ std::string formatEntrySize(size_t size) {
         outRes /= 1024;
         ++index;
     }
-    return std::format("{:.1f}", outRes) + ' ' + suffix[index];
+    std::ostringstream formatted;
+    formatted << std::fixed << std::setprecision(1) << outRes << ' '
+              << suffix[index];
+    return formatted.str();
 }
 
 std::string formatEntryStatus(size_t doneDirs, size_t totalDirs, size_t curSize) {
@@ -178,32 +180,4 @@ CreateResult mkdir(const fs::path& path, std::string name) {
         return CreateResult::AlreadyExists;
     }
     return CreateResult::Ok;
-}
-
-std::string getFileType(const fs::path& path) {
-    magic_t magic_cookie = magic_open(MAGIC_MIME_TYPE);
-    
-    if (magic_cookie == nullptr) {
-        std::cerr << "Failed to initialize libmagic." << std::endl;
-        return "err";
-    }
-
-    if (magic_load(magic_cookie, nullptr) != 0) {
-        std::cerr << "Cannot load magic database: " << magic_error(magic_cookie) << std::endl;
-        magic_close(magic_cookie);
-        return "err";
-    }
-
-    const char* mimeRaw = magic_file(magic_cookie, path.c_str());
-    
-    if (mimeRaw == nullptr) {
-        std::cerr << "Error identifying file: " 
-                  << magic_error(magic_cookie) << std::endl;
-        return "err";
-    }
-
-    std::string mimeType(mimeRaw);
-
-    magic_close(magic_cookie);
-    return mimeType;
 }

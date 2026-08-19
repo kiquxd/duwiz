@@ -58,5 +58,3 @@ public:
         return text(buf_.value()) | color(isMsg_ ? Color::PaleGreen1 : Color::PaleVioletRed1);
     }
 };
-
-Elements renderContent(const fs::path& path);

@@ -44,9 +44,5 @@ Config parseFlags(int argc, char* argv[]) {
         }
     }
 
-    if (config.path.empty() || !config.flags.contains("jobs")) {
-        config.invalid = true;
-    }
-
     return config;
 }

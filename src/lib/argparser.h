@@ -2,8 +2,8 @@
 #include <unordered_set>
 
 struct Config {
-    std::string path;
-    size_t threads;
+    std::string path = ".";
+    size_t threads = 4;
     std::unordered_set<std::string> flags;
     bool invalid = false;
 };
