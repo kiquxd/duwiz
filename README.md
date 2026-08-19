@@ -49,6 +49,7 @@ bootstrap command also performs this initialization when the submodule is
 configured but has not been checked out yet. `PREVIEW_ROOT=/path/to/preview_lib`
 remains available for local library development.
 
-Supported targets are Linux x86-64 and macOS arm64. On macOS, install the Xcode
-command line tools first. If a checkout was moved from another machine,
+Supported targets are Linux x86-64 and macOS arm64. On macOS, install full
+Xcode; the standalone Command Line Tools package is not sufficient to build
+PDFium. If a checkout was moved from another machine,
 `scripts/configure.sh` detects and refreshes the stale absolute CMake cache.

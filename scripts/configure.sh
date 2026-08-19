@@ -23,8 +23,12 @@ case "$(uname -s):$(uname -m)" in
     )
     ;;
   Darwin:arm64)
-    if ! command -v xcrun >/dev/null 2>&1; then
-      printf 'xcrun is required; install the Xcode command line tools.\n' >&2
+    if ! command -v xcrun >/dev/null 2>&1 ||
+       ! command -v xcodebuild >/dev/null 2>&1 ||
+       ! xcodebuild -version >/dev/null 2>&1; then
+      printf 'Full Xcode is required; Command Line Tools alone are insufficient.\n' >&2
+      printf 'Select Xcode with:\n' >&2
+      printf '  sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer\n' >&2
       exit 1
     fi
     compiler="${PDFIUM_ROOT}/third_party/llvm-build/Release+Asserts/bin/clang++"
