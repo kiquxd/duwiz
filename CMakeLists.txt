@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.24)
 project(ya_ncdu LANGUAGES C CXX)
 
 include(CTest)
+include(GNUInstallDirs)
 find_package(Threads REQUIRED)
 
 set(PREVIEW_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/preview_lib" CACHE PATH
@@ -48,8 +49,17 @@ target_link_libraries(ya-ncdu PRIVATE
   ftxui::dom
   ftxui::screen
   Threads::Threads)
+if(APPLE)
+  set(YA_NCDU_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+else()
+  set(YA_NCDU_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+endif()
 set_target_properties(ya-ncdu PROPERTIES
-  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+  INSTALL_RPATH "${YA_NCDU_INSTALL_RPATH}")
+
+install(TARGETS ya-ncdu
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 if(BUILD_TESTING)
   add_executable(preview_integration_test
