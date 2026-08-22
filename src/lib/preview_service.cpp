@@ -28,7 +28,9 @@ PreviewService::~PreviewService() {
 
 void PreviewService::Request(std::filesystem::path path,
                              std::uint32_t columns,
-                             std::uint32_t rows) {
+                             std::uint32_t rows,
+                             std::uint32_t target_pixel_width,
+                             std::uint32_t target_pixel_height) {
     {
         std::lock_guard guard(mutex_);
         active_stop_.request_stop();
@@ -37,7 +39,17 @@ void PreviewService::Request(std::filesystem::path path,
 
         columns = std::max<std::uint32_t>(columns, 1);
         rows = std::max<std::uint32_t>(rows, 1);
+        if (target_pixel_width == 0) {
+            target_pixel_width = columns;
+        }
+        if (target_pixel_height == 0) {
+            target_pixel_height = rows >
+                    std::numeric_limits<std::uint32_t>::max() / 2
+                ? std::numeric_limits<std::uint32_t>::max()
+                : rows * 2;
+        }
         pending_ = Job{generation_, std::move(path), columns, rows,
+                       target_pixel_width, target_pixel_height,
                        active_stop_.get_token()};
         snapshot_ = std::make_shared<PreviewSnapshot>(PreviewSnapshot{
             .status = PreviewStatus::Loading,
@@ -164,11 +176,8 @@ void PreviewService::Worker(std::stop_token shutdown) {
         request.pixel_format = preview::PixelFormat::rgba8;
         request.viewport.text_columns = job->columns;
         request.viewport.text_rows = job->rows;
-        request.viewport.target_pixel_width = job->columns;
-        request.viewport.target_pixel_height = job->rows >
-                std::numeric_limits<std::uint32_t>::max() / 2
-            ? std::numeric_limits<std::uint32_t>::max()
-            : job->rows * 2;
+        request.viewport.target_pixel_width = job->target_pixel_width;
+        request.viewport.target_pixel_height = job->target_pixel_height;
 
         auto result = engine_result.value().make_preview(*source_result.value(),
                                                          request);

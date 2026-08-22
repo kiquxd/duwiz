@@ -38,7 +38,8 @@ public:
     PreviewService& operator=(const PreviewService&) = delete;
 
     void Request(std::filesystem::path path, std::uint32_t columns,
-                 std::uint32_t rows);
+                 std::uint32_t rows, std::uint32_t target_pixel_width = 0,
+                 std::uint32_t target_pixel_height = 0);
     void Clear();
 
     [[nodiscard]] std::shared_ptr<const PreviewSnapshot> Snapshot() const;
@@ -49,6 +50,8 @@ private:
         std::filesystem::path path;
         std::uint32_t columns;
         std::uint32_t rows;
+        std::uint32_t target_pixel_width;
+        std::uint32_t target_pixel_height;
         std::stop_token cancellation;
     };
 

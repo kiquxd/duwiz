@@ -97,6 +97,44 @@ int main() {
     Require(rendered.find("image/png") != std::string::npos,
             "FTXUI output does not contain image metadata");
 
+    PreviewRenderer kitty_renderer;
+    kitty_renderer.SetOptions({
+        .image_backend = PreviewImageBackend::KittyUnicode,
+        .max_image_columns = 20,
+        .max_image_rows = 8,
+        .cell_pixel_width = 1,
+        .cell_pixel_height = 1,
+    });
+    auto kitty_screen = ftxui::Screen::Create(
+        ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(24));
+    ftxui::Render(kitty_screen, kitty_renderer.Render(snapshot));
+    const std::string kitty_frame = kitty_screen.ToString();
+    Require(kitty_frame.find("\x1b_Ga=T,f=32") != std::string::npos,
+            "Kitty frame does not upload RGBA pixels");
+    Require(kitty_frame.find("\xf4\x8e\xbb\xae") != std::string::npos,
+            "Kitty frame does not contain Unicode image placeholders");
+
+    kitty_screen.Clear();
+    ftxui::Render(kitty_screen, kitty_renderer.Render(snapshot));
+    Require(kitty_screen.ToString().find("\x1b_Ga=T,f=32") ==
+                std::string::npos,
+            "unchanged Kitty image was uploaded more than once");
+    Require(kitty_renderer.TakeCleanupCommand().find("a=d,d=I") !=
+                std::string::npos,
+            "Kitty renderer does not release image data on cleanup");
+
+    PreviewRenderer ansi_renderer;
+    ansi_renderer.SetOptions({
+        .image_backend = PreviewImageBackend::Ansi,
+        .max_image_columns = 20,
+        .max_image_rows = 8,
+    });
+    auto ansi_screen = ftxui::Screen::Create(
+        ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(24));
+    ftxui::Render(ansi_screen, ansi_renderer.Render(snapshot));
+    Require(ansi_screen.ToString().find("\x1b_G") == std::string::npos,
+            "ANSI fallback unexpectedly emitted Kitty commands");
+
     const auto pdf_path = corpus / "hello_world.pdf";
     service.Request(pdf_path, 30, 10);
     snapshot = wait_for_path(pdf_path);

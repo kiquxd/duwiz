@@ -9,6 +9,7 @@ Features:
 - directory browsing and parallel size calculation;
 - UTF-8/UTF-16 text, bounded hex, and PNG/JPEG/GIF/BMP previews;
 - lexical highlighting for C/C++, Python, Bash, JSON, CMake, and Markdown;
+- Kitty Unicode image placeholders with automatic ANSI fallback;
 - a fullscreen preview that requests an image at the larger viewport size;
 - PDF detection and opening in the native system viewer;
 - create, rename, and delete files or empty directories;
@@ -107,11 +108,14 @@ sudo cmake --install build --prefix /usr/local
 | `d` | Delete a file or empty directory after confirmation |
 | `q` | Quit |
 
-The right pane is intentionally compact. An image can look soft there because
-many source pixels must be reduced to few terminal cells. Fullscreen mode does
-not enlarge that small result: it asks `preview_lib` to decode/resize again for
-the full terminal viewport. Rendering uses ANSI true color and the `▀` half
-block, giving two vertical pixels per cell. WebP is intentionally unsupported.
+The right pane is intentionally compact. In Kitty, images use Unicode graphics
+placeholders and a physical-pixel raster. Other terminals automatically use
+ANSI true color and the `▀` half block, giving two vertical pixels per cell.
+Fullscreen mode does not enlarge a small cached result: it asks `preview_lib`
+to decode/resize again for the full viewport. Set
+`YA_NCDU_IMAGE_BACKEND=ansi` or `kitty` to override automatic selection while
+diagnosing terminal behavior. tmux currently uses ANSI in automatic mode.
+WebP is intentionally unsupported.
 
 PDFs are not rendered inside the terminal. The preview pane identifies them and
 `o` starts `open` on macOS or `xdg-open` on Linux. The viewer is never launched

@@ -18,10 +18,17 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <iostream>
+#include <string_view>
 #include <unordered_map>
 #include <filesystem>
+
+#include <sys/ioctl.h>
+#include <unistd.h>
  
 
 using namespace ftxui;
@@ -30,6 +37,80 @@ namespace fs = std::filesystem;
 constexpr size_t MIN_DIR_ENTRY_LEN = 48;
 
 constexpr size_t MIN_SIZE_ENTRY_LEN = 12;
+
+namespace {
+
+struct CellPixels {
+    std::uint32_t width = 10;
+    std::uint32_t height = 20;
+};
+
+std::string Lowercase(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char ch) {
+                       return static_cast<char>(std::tolower(ch));
+                   });
+    return value;
+}
+
+std::string Environment(std::string_view name) {
+    const char* value = std::getenv(std::string(name).c_str());
+    return value ? value : "";
+}
+
+bool ContainsKitty(std::string value) {
+    return Lowercase(std::move(value)).find("kitty") != std::string::npos;
+}
+
+PreviewImageBackend SelectImageBackend(const ScreenInteractive& screen) {
+    const std::string requested = Lowercase(Environment("YA_NCDU_IMAGE_BACKEND"));
+    if (requested == "ansi") return PreviewImageBackend::Ansi;
+    if (requested == "kitty") return PreviewImageBackend::KittyUnicode;
+
+    // Raw Kitty APC commands require explicit passthrough inside tmux. Until
+    // that is implemented, auto mode chooses the reliable ANSI renderer.
+    if (!Environment("TMUX").empty()) return PreviewImageBackend::Ansi;
+    const bool kitty = ContainsKitty(Environment("TERM")) ||
+        ContainsKitty(Environment("TERM_PROGRAM")) ||
+        ContainsKitty(screen.TerminalName()) ||
+        ContainsKitty(screen.TerminalEmulatorName());
+    return kitty ? PreviewImageBackend::KittyUnicode
+                 : PreviewImageBackend::Ansi;
+}
+
+CellPixels DetectCellPixels() {
+    winsize size{};
+    if (::ioctl(STDOUT_FILENO, TIOCGWINSZ, &size) == 0 &&
+        size.ws_col != 0 && size.ws_row != 0 &&
+        size.ws_xpixel != 0 && size.ws_ypixel != 0) {
+        return {
+            std::max<std::uint32_t>(1, size.ws_xpixel / size.ws_col),
+            std::max<std::uint32_t>(1, size.ws_ypixel / size.ws_row),
+        };
+    }
+    return {};
+}
+
+std::pair<std::uint32_t, std::uint32_t> BoundPixelViewport(
+        std::uint64_t width, std::uint64_t height) {
+    constexpr std::uint64_t max_dimension = 4096;
+    constexpr std::uint64_t max_pixels = 4 * 1024 * 1024;
+    width = std::clamp<std::uint64_t>(width, 1, max_dimension);
+    height = std::clamp<std::uint64_t>(height, 1, max_dimension);
+    if (width * height > max_pixels) {
+        const double scale = std::sqrt(
+            static_cast<double>(max_pixels) /
+            static_cast<double>(width * height));
+        width = std::max<std::uint64_t>(1,
+            static_cast<std::uint64_t>(width * scale));
+        height = std::max<std::uint64_t>(1,
+            static_cast<std::uint64_t>(height * scale));
+    }
+    return {static_cast<std::uint32_t>(width),
+            static_cast<std::uint32_t>(height)};
+}
+
+}  // namespace
 
 enum TabIndex : int {
     Browser = 0,
@@ -78,6 +159,7 @@ int main(int argc, char** argv) {
     PreviewService previewService([&screen] {
         screen.PostEvent(Event::Custom);
     });
+    PreviewRenderer previewRenderer;
 
     auto requestPreview = [&] {
         if (selected < 0 || static_cast<size_t>(selected) >= fullPathEntries.size()) {
@@ -91,10 +173,30 @@ int main(int argc, char** argv) {
         const int availableRows = previewFullscreen
             ? screen.dimy() - 6
             : screen.dimy() - 12;
+        const auto columns = static_cast<std::uint32_t>(
+            std::max(20, availableColumns));
+        const auto rows = static_cast<std::uint32_t>(
+            std::max(4, availableRows));
+        const auto imageRows = rows > 6 ? rows - 6 : 1;
+        const auto backend = SelectImageBackend(screen);
+        const CellPixels cellPixels = DetectCellPixels();
+        const auto [pixelWidth, pixelHeight] = backend ==
+                PreviewImageBackend::KittyUnicode
+            ? BoundPixelViewport(
+                static_cast<std::uint64_t>(columns) * cellPixels.width,
+                static_cast<std::uint64_t>(imageRows) * cellPixels.height)
+            : BoundPixelViewport(columns,
+                                 static_cast<std::uint64_t>(imageRows) * 2);
+        previewRenderer.SetOptions({
+            .image_backend = backend,
+            .max_image_columns = columns,
+            .max_image_rows = imageRows,
+            .cell_pixel_width = cellPixels.width,
+            .cell_pixel_height = cellPixels.height,
+        });
         previewService.Request(
             fullPathEntries[static_cast<size_t>(selected)],
-            static_cast<std::uint32_t>(std::max(20, availableColumns)),
-            static_cast<std::uint32_t>(std::max(4, availableRows))
+            columns, rows, pixelWidth, pixelHeight
         );
     };
 
@@ -333,7 +435,7 @@ int main(int argc, char** argv) {
                 dirMenu->Render() | size(WIDTH, GREATER_THAN, MIN_DIR_ENTRY_LEN),
                 sizeMenu->Render() | size(WIDTH, GREATER_THAN, MIN_SIZE_ENTRY_LEN) | align_right,
                 separator(),
-                RenderPreview(previewService.Snapshot()) | xflex
+                previewRenderer.Render(previewService.Snapshot()) | xflex
             }) | frame | border,
             hbox({
                 text("$ " + path.string()) | bold | color(Color::LightSlateGrey),
@@ -385,7 +487,7 @@ int main(int argc, char** argv) {
         }
         if (previewFullscreen) {
             return vbox({
-                RenderPreview(previewService.Snapshot()) | flex,
+                previewRenderer.Render(previewService.Snapshot()) | flex,
                 separator(),
                 text("p / Esc: close preview") | color(Color::LightSlateGrey)
             }) | border;
@@ -576,7 +678,7 @@ int main(int argc, char** argv) {
         return false;
     });
 
-    updateEntries();
-
+    screen.Post([&] { updateEntries(); });
     screen.Loop(eventHandler);
+    std::cout << previewRenderer.TakeCleanupCommand() << std::flush;
 }
