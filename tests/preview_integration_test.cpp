@@ -76,6 +76,16 @@ int main() {
     Require(text_preview.syntax_language == preview::SyntaxLanguage::markdown,
             "Markdown language was not detected");
     Require(has_syntax, "Markdown semantic syntax spans are missing");
+    Require(!text_preview.display_lines.empty(),
+            "Markdown terminal rendering is missing");
+    auto markdown_screen = ftxui::Screen::Create(
+        ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(24));
+    ftxui::Render(markdown_screen, RenderPreview(snapshot));
+    const std::string rendered_markdown = markdown_screen.ToString();
+    Require(rendered_markdown.find("preview") != std::string::npos,
+            "rendered Markdown heading is missing");
+    Require(rendered_markdown.find("# preview") == std::string::npos,
+            "rendered Markdown still exposes heading source markers");
 
     // The last request must win even when the previous one is still debouncing.
     const auto jpeg_path = corpus / "sample.jpg";

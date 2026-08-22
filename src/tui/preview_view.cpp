@@ -114,6 +114,9 @@ Element StyleSyntax(Element element, preview::SyntaxToken token) {
         case Token::heading: return element | color(Color::Yellow) | bold;
         case Token::link: return element | color(Color::CornflowerBlue) | underlined;
         case Token::code_literal: return element | color(Color::PaleGreen1);
+        case Token::emphasis: return element | italic;
+        case Token::strong: return element | bold;
+        case Token::strikethrough: return element | strikethrough;
         case Token::operator_symbol: return element | color(Color::LightSlateGrey);
     }
     return element;
@@ -219,7 +222,10 @@ Element RenderResult(const preview::Preview& result, Element image) {
     if (!result.metadata.items.empty()) body.push_back(separator());
 
     if (const auto* content = std::get_if<preview::TextPreview>(&result.content)) {
-        for (const auto& line : content->lines) body.push_back(RenderTextLine(line));
+        const auto& lines = content->display_lines.empty()
+                                ? content->lines
+                                : content->display_lines;
+        for (const auto& line : lines) body.push_back(RenderTextLine(line));
         if (content->has_more) {
             body.push_back(text("… more data available") |
                            color(Color::LightSlateGrey));

@@ -32,5 +32,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=build /usr/local /usr/local
 
 WORKDIR /data
-ENTRYPOINT ["ya-ncdu"]
+ENTRYPOINT ["duwiz"]
 CMD ["--path", "/data"]

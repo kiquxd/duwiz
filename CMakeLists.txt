@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(ya_ncdu LANGUAGES C CXX)
+project(duwiz LANGUAGES C CXX)
 
 include(CTest)
 include(GNUInstallDirs)
@@ -32,7 +32,7 @@ set(PREVIEW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(PREVIEW_ENABLE_SANITIZERS OFF CACHE BOOL "" FORCE)
 add_subdirectory("${PREVIEW_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/preview")
 
-add_executable(ya-ncdu
+add_executable(duwiz
   src/bin/main.cpp
   src/lib/argparser.cpp
   src/lib/fs.cpp
@@ -41,25 +41,25 @@ add_executable(ya-ncdu
   src/lib/thread_pool.cpp
   src/tui/preview_view.cpp
   src/tui/utils.cpp)
-target_compile_features(ya-ncdu PRIVATE cxx_std_20)
-target_compile_options(ya-ncdu PRIVATE -Wall -Wextra -Wpedantic)
-target_include_directories(ya-ncdu PRIVATE src)
-target_link_libraries(ya-ncdu PRIVATE
+target_compile_features(duwiz PRIVATE cxx_std_20)
+target_compile_options(duwiz PRIVATE -Wall -Wextra -Wpedantic)
+target_include_directories(duwiz PRIVATE src)
+target_link_libraries(duwiz PRIVATE
   preview::preview
   ftxui::component
   ftxui::dom
   ftxui::screen
   Threads::Threads)
 if(APPLE)
-  set(YA_NCDU_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
+  set(DUWIZ_INSTALL_RPATH "@loader_path/../${CMAKE_INSTALL_LIBDIR}")
 else()
-  set(YA_NCDU_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
+  set(DUWIZ_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
 endif()
-set_target_properties(ya-ncdu PROPERTIES
+set_target_properties(duwiz PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-  INSTALL_RPATH "${YA_NCDU_INSTALL_RPATH}")
+  INSTALL_RPATH "${DUWIZ_INSTALL_RPATH}")
 
-install(TARGETS ya-ncdu
+install(TARGETS duwiz
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 if(BUILD_TESTING)

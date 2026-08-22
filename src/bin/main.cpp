@@ -63,7 +63,7 @@ bool ContainsKitty(std::string value) {
 }
 
 PreviewImageBackend SelectImageBackend(const ScreenInteractive& screen) {
-    const std::string requested = Lowercase(Environment("YA_NCDU_IMAGE_BACKEND"));
+    const std::string requested = Lowercase(Environment("DUWIZ_IMAGE_BACKEND"));
     if (requested == "ansi") return PreviewImageBackend::Ansi;
     if (requested == "kitty") return PreviewImageBackend::KittyUnicode;
 
@@ -430,7 +430,7 @@ int main(int argc, char** argv) {
 
     auto mainRenderer = Renderer(dirMenu, [&] {
         return vbox({
-            text("--- Dir List ---") | bold | color(Color::Blue),
+            text("duwiz · files") | bold | color(Color::Blue),
             hbox({
                 dirMenu->Render() | size(WIDTH, GREATER_THAN, MIN_DIR_ENTRY_LEN),
                 sizeMenu->Render() | size(WIDTH, GREATER_THAN, MIN_SIZE_ENTRY_LEN) | align_right,
