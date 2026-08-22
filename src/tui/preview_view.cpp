@@ -124,21 +124,27 @@ Element StyleSyntax(Element element, preview::SyntaxToken token) {
     return element;
 }
 
-std::string TextGutter(const preview::TextLine& line) {
-    if (line.line_number == 0) return {};
+std::string TextGutter(const preview::TextLine& line,
+                       std::size_t number_width) {
+    if (number_width == 0) return {};
+    if (line.line_number == 0 || line.wrapped_continuation) {
+        return std::string(number_width + 3, ' ');
+    }
     const auto number = std::to_string(line.line_number);
-    return line.wrapped_continuation ? std::string(number.size() + 3, ' ')
-                                     : number + " │ ";
+    return std::string(number_width - std::min(number_width, number.size()), ' ') +
+           number + " │ ";
 }
 
-Element RenderTextLine(const preview::TextLine& line) {
+Element RenderTextLine(const preview::TextLine& line,
+                       std::size_t number_width) {
     Elements parts;
     std::size_t cursor = 0;
     for (const auto& style : line.styles) {
         const auto begin = static_cast<std::size_t>(style.byte_begin);
         const auto end = static_cast<std::size_t>(style.byte_end);
         if (begin < cursor || end < begin || end > line.text.size()) {
-            return hbox({text(TextGutter(line)) | color(Color::Grey50),
+            return hbox({text(TextGutter(line, number_width)) |
+                             color(Color::Grey50),
                          text(line.text)});
         }
         if (begin != cursor) {
@@ -149,7 +155,7 @@ Element RenderTextLine(const preview::TextLine& line) {
         cursor = end;
     }
     if (cursor != line.text.size()) parts.push_back(text(line.text.substr(cursor)));
-    return hbox({text(TextGutter(line)) | color(Color::Grey50),
+    return hbox({text(TextGutter(line, number_width)) | color(Color::Grey50),
                  hbox(std::move(parts))});
 }
 
@@ -312,7 +318,16 @@ Element RenderResult(const preview::Preview& result, Element image) {
         const auto& lines = content->display_lines.empty()
                                 ? content->lines
                                 : content->display_lines;
-        for (const auto& line : lines) body.push_back(RenderTextLine(line));
+        std::size_t number_width = 0;
+        for (const auto& line : lines) {
+            if (line.line_number != 0) {
+                number_width = std::max(
+                    number_width, std::to_string(line.line_number).size());
+            }
+        }
+        for (const auto& line : lines) {
+            body.push_back(RenderTextLine(line, number_width));
+        }
         if (content->has_more) {
             body.push_back(text("… more data available") |
                            color(Color::LightSlateGrey));

@@ -89,6 +89,33 @@ int main() {
     Require(rendered_markdown.find("1 │") != std::string::npos,
             "rendered text does not show source line numbers");
 
+    auto numbered_result = std::make_shared<preview::Preview>();
+    numbered_result->detected_format = "text";
+    preview::TextPreview numbered_text;
+    numbered_text.display_lines = {
+        {.text = "first", .line_number = 1},
+        {.text = "tenth", .line_number = 10},
+    };
+    numbered_result->content = std::move(numbered_text);
+    auto numbered_snapshot = std::make_shared<PreviewSnapshot>(PreviewSnapshot{
+        .status = PreviewStatus::Ready,
+        .path = "numbered.txt",
+        .result = numbered_result,
+    });
+    auto numbered_screen = ftxui::Screen::Create(
+        ftxui::Dimension::Fixed(40), ftxui::Dimension::Fixed(10));
+    ftxui::Render(numbered_screen, RenderPreview(numbered_snapshot));
+    const auto rendered_numbers = numbered_screen.ToString();
+    const auto column_of = [&](std::string_view value) {
+        const auto position = rendered_numbers.find(value);
+        if (position == std::string::npos) return position;
+        const auto line = rendered_numbers.rfind('\n', position);
+        return position - (line == std::string::npos ? 0 : line + 1);
+    };
+    Require(column_of("first") != std::string::npos &&
+                column_of("first") == column_of("tenth"),
+            "line number gutter is not aligned to its widest number");
+
     auto table_result = std::make_shared<preview::Preview>();
     table_result->detected_format = "csv";
     table_result->detected_mime = "text/csv";
