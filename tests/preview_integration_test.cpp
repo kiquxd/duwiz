@@ -111,6 +111,24 @@ int main() {
                 table_screen.ToString().find("count") != std::string::npos,
             "semantic table preview is not rendered by FTXUI");
 
+    auto archive_result = std::make_shared<preview::Preview>();
+    archive_result->detected_format = "zip";
+    archive_result->detected_mime = "application/zip";
+    archive_result->content = preview::ArchivePreview{
+        .entries = {{"docs/readme.txt", "file", "deflate", 42, 20}},
+    };
+    auto archive_snapshot = std::make_shared<PreviewSnapshot>(PreviewSnapshot{
+        .status = PreviewStatus::Ready,
+        .path = "sample.zip",
+        .result = archive_result,
+    });
+    auto archive_screen = ftxui::Screen::Create(
+        ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(24));
+    ftxui::Render(archive_screen, RenderPreview(archive_snapshot));
+    Require(archive_screen.ToString().find("docs/readme.txt") !=
+                std::string::npos,
+            "archive entries are not rendered by FTXUI");
+
     // The last request must win even when the previous one is still debouncing.
     const auto jpeg_path = corpus / "sample.jpg";
     const auto png_path = corpus / "sample.png";

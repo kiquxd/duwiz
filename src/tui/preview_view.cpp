@@ -215,6 +215,20 @@ Element RenderTable(const preview::TablePreview& table) {
     return vbox(std::move(lines));
 }
 
+Element RenderArchive(const preview::ArchivePreview& archive) {
+    preview::TablePreview table;
+    table.columns = {{"path", preview::TableAlignment::left},
+                     {"kind", preview::TableAlignment::left},
+                     {"size", preview::TableAlignment::right},
+                     {"method", preview::TableAlignment::left}};
+    table.has_more = archive.has_more;
+    for (const auto& entry : archive.entries) {
+        table.rows.push_back({{entry.path, entry.kind, std::to_string(entry.size),
+                               entry.method}});
+    }
+    return RenderTable(table);
+}
+
 class KittyPlaceholderNode final : public Node {
 public:
     KittyPlaceholderNode(std::uint32_t image_id, std::uint32_t columns,
@@ -308,6 +322,9 @@ Element RenderResult(const preview::Preview& result, Element image) {
     } else if (const auto* content =
                    std::get_if<preview::TablePreview>(&result.content)) {
         body.push_back(RenderTable(*content));
+    } else if (const auto* content =
+                   std::get_if<preview::ArchivePreview>(&result.content)) {
+        body.push_back(RenderArchive(*content));
     } else if (const auto* content =
                    std::get_if<preview::UnsupportedContent>(&result.content)) {
         body.push_back(text(content->reason) | color(Color::Yellow));
