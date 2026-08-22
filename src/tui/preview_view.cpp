@@ -153,6 +153,68 @@ Element RenderTextLine(const preview::TextLine& line) {
                  hbox(std::move(parts))});
 }
 
+std::size_t TableWidth(const preview::TablePreview& table,
+                       std::size_t column) {
+    std::size_t width = table.columns[column].name.size();
+    for (const auto& row : table.rows) {
+        if (column < row.cells.size()) width = std::max(width, row.cells[column].size());
+    }
+    return std::clamp<std::size_t>(width, 3, 32);
+}
+
+Element TableCell(std::string value, std::size_t width,
+                  preview::TableAlignment alignment, bool header = false) {
+    if (value.size() > width) {
+        const auto limit = width > 1 ? width - 1 : 0;
+        std::size_t end = 0;
+        while (end < value.size() && end < limit) {
+            const auto first = static_cast<unsigned char>(value[end]);
+            const std::size_t bytes = first < 0x80 ? 1
+                : (first & 0xe0) == 0xc0 ? 2
+                : (first & 0xf0) == 0xe0 ? 3
+                : (first & 0xf8) == 0xf0 ? 4 : 1;
+            if (end + bytes > limit) break;
+            end += bytes;
+        }
+        value.resize(end);
+        value += "…";
+    }
+    Element cell = text(std::move(value));
+    if (alignment == preview::TableAlignment::right) cell = cell | align_right;
+    if (alignment == preview::TableAlignment::center) cell = cell | center;
+    if (header) cell = cell | bold | color(Color::Cyan);
+    return cell | size(WIDTH, EQUAL, static_cast<int>(width + 2));
+}
+
+Element RenderTable(const preview::TablePreview& table) {
+    if (table.columns.empty()) return text("Empty table") | dim;
+    std::vector<std::size_t> widths;
+    for (std::size_t column = 0; column < table.columns.size(); ++column) {
+        widths.push_back(TableWidth(table, column));
+    }
+    Elements lines;
+    Elements header;
+    for (std::size_t column = 0; column < table.columns.size(); ++column) {
+        if (column != 0) header.push_back(separator());
+        header.push_back(TableCell(table.columns[column].name, widths[column],
+                                   table.columns[column].alignment, true));
+    }
+    lines.push_back(hbox(std::move(header)));
+    lines.push_back(separator());
+    for (const auto& row : table.rows) {
+        Elements cells;
+        for (std::size_t column = 0; column < table.columns.size(); ++column) {
+            if (column != 0) cells.push_back(separator());
+            cells.push_back(TableCell(
+                column < row.cells.size() ? row.cells[column] : "",
+                widths[column], table.columns[column].alignment));
+        }
+        lines.push_back(hbox(std::move(cells)));
+    }
+    if (table.has_more) lines.push_back(text("… more rows") | dim);
+    return vbox(std::move(lines));
+}
+
 class KittyPlaceholderNode final : public Node {
 public:
     KittyPlaceholderNode(std::uint32_t image_id, std::uint32_t columns,
@@ -243,6 +305,9 @@ Element RenderResult(const preview::Preview& result, Element image) {
         }
     } else if (std::holds_alternative<preview::PixelPreview>(result.content)) {
         body.push_back(std::move(image));
+    } else if (const auto* content =
+                   std::get_if<preview::TablePreview>(&result.content)) {
+        body.push_back(RenderTable(*content));
     } else if (const auto* content =
                    std::get_if<preview::UnsupportedContent>(&result.content)) {
         body.push_back(text(content->reason) | color(Color::Yellow));

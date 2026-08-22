@@ -89,6 +89,28 @@ int main() {
     Require(rendered_markdown.find("1 │") != std::string::npos,
             "rendered text does not show source line numbers");
 
+    auto table_result = std::make_shared<preview::Preview>();
+    table_result->detected_format = "csv";
+    table_result->detected_mime = "text/csv";
+    table_result->content = preview::TablePreview{
+        .columns = {{"name", preview::TableAlignment::left},
+                    {"count", preview::TableAlignment::right}},
+        .rows = {{{"alpha", "12"}}, {{"beta", "3"}}},
+        .delimiter = ',',
+        .has_header = true,
+    };
+    auto table_snapshot = std::make_shared<PreviewSnapshot>(PreviewSnapshot{
+        .status = PreviewStatus::Ready,
+        .path = "sample.csv",
+        .result = table_result,
+    });
+    auto table_screen = ftxui::Screen::Create(
+        ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(24));
+    ftxui::Render(table_screen, RenderPreview(table_snapshot));
+    Require(table_screen.ToString().find("alpha") != std::string::npos &&
+                table_screen.ToString().find("count") != std::string::npos,
+            "semantic table preview is not rendered by FTXUI");
+
     // The last request must win even when the previous one is still debouncing.
     const auto jpeg_path = corpus / "sample.jpg";
     const auto png_path = corpus / "sample.png";
