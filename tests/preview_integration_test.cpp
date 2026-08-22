@@ -86,6 +86,8 @@ int main() {
             "rendered Markdown heading is missing");
     Require(rendered_markdown.find("# preview") == std::string::npos,
             "rendered Markdown still exposes heading source markers");
+    Require(rendered_markdown.find("1 │") != std::string::npos,
+            "rendered text does not show source line numbers");
 
     // The last request must win even when the previous one is still debouncing.
     const auto jpeg_path = corpus / "sample.jpg";

@@ -117,9 +117,18 @@ Element StyleSyntax(Element element, preview::SyntaxToken token) {
         case Token::emphasis: return element | italic;
         case Token::strong: return element | bold;
         case Token::strikethrough: return element | strikethrough;
+        case Token::search_match:
+            return element | color(Color::Black) | bgcolor(Color::Yellow);
         case Token::operator_symbol: return element | color(Color::LightSlateGrey);
     }
     return element;
+}
+
+std::string TextGutter(const preview::TextLine& line) {
+    if (line.line_number == 0) return {};
+    const auto number = std::to_string(line.line_number);
+    return line.wrapped_continuation ? std::string(number.size() + 3, ' ')
+                                     : number + " │ ";
 }
 
 Element RenderTextLine(const preview::TextLine& line) {
@@ -129,7 +138,8 @@ Element RenderTextLine(const preview::TextLine& line) {
         const auto begin = static_cast<std::size_t>(style.byte_begin);
         const auto end = static_cast<std::size_t>(style.byte_end);
         if (begin < cursor || end < begin || end > line.text.size()) {
-            return text(line.text);
+            return hbox({text(TextGutter(line)) | color(Color::Grey50),
+                         text(line.text)});
         }
         if (begin != cursor) {
             parts.push_back(text(line.text.substr(cursor, begin - cursor)));
@@ -139,7 +149,8 @@ Element RenderTextLine(const preview::TextLine& line) {
         cursor = end;
     }
     if (cursor != line.text.size()) parts.push_back(text(line.text.substr(cursor)));
-    return hbox(std::move(parts));
+    return hbox({text(TextGutter(line)) | color(Color::Grey50),
+                 hbox(std::move(parts))});
 }
 
 class KittyPlaceholderNode final : public Node {
