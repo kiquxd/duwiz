@@ -127,8 +127,11 @@ Element StyleSyntax(Element element, preview::SyntaxToken token) {
 std::string TextGutter(const preview::TextLine& line,
                        std::size_t number_width) {
     if (number_width == 0) return {};
-    if (line.line_number == 0 || line.wrapped_continuation) {
+    if (line.line_number == 0) {
         return std::string(number_width + 3, ' ');
+    }
+    if (line.wrapped_continuation) {
+        return std::string(number_width, ' ') + " │ ";
     }
     const auto number = std::to_string(line.line_number);
     return std::string(number_width - std::min(number_width, number.size()), ' ') +

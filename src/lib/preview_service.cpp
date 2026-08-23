@@ -12,6 +12,24 @@ std::string ErrorMessage(const preview::Error& error) {
     return error.message.empty() ? "preview backend failed" : error.message;
 }
 
+std::uint32_t DecimalDigits(std::uint32_t value) {
+    std::uint32_t digits = 1;
+    while (value >= 10) {
+        value /= 10;
+        ++digits;
+    }
+    return digits;
+}
+
+std::uint32_t TextContentColumns(std::uint32_t columns,
+                                 std::uint32_t rows) {
+    // TextPreview returns at most `rows` source lines for the current window.
+    // Reserve enough room for its widest line number plus " │ " so wrapping
+    // happens once in preview_lib instead of a second time in the terminal.
+    const auto gutter = DecimalDigits(rows) + 3;
+    return columns > gutter ? columns - gutter : 1;
+}
+
 }  // namespace
 
 PreviewService::PreviewService(Notify notify)
@@ -174,7 +192,8 @@ void PreviewService::Worker(std::stop_token shutdown) {
         preview::Request request;
         request.stop_token = job->cancellation;
         request.pixel_format = preview::PixelFormat::rgba8;
-        request.viewport.text_columns = job->columns;
+        request.viewport.text_columns = TextContentColumns(job->columns,
+                                                           job->rows);
         request.viewport.text_rows = job->rows;
         request.viewport.target_pixel_width = job->target_pixel_width;
         request.viewport.target_pixel_height = job->target_pixel_height;

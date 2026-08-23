@@ -27,6 +27,23 @@ void Require(bool condition, const std::string& message) {
     if (!condition) Fail(message);
 }
 
+std::string StripAnsi(std::string_view input) {
+    std::string output;
+    for (std::size_t position = 0; position < input.size();) {
+        if (input[position] == '\x1b' && position + 1 < input.size() &&
+            input[position + 1] == '[') {
+            position += 2;
+            while (position < input.size()) {
+                const auto byte = static_cast<unsigned char>(input[position++]);
+                if (byte >= 0x40 && byte <= 0x7e) break;
+            }
+            continue;
+        }
+        output.push_back(input[position++]);
+    }
+    return output;
+}
+
 }  // namespace
 
 int main() {
@@ -78,6 +95,14 @@ int main() {
     Require(has_syntax, "Markdown semantic syntax spans are missing");
     Require(!text_preview.display_lines.empty(),
             "Markdown terminal rendering is missing");
+    for (const auto& line : text_preview.display_lines) {
+        std::size_t columns = 0;
+        for (const unsigned char byte : line.text) {
+            if ((byte & 0xc0) != 0x80) ++columns;
+        }
+        Require(columns <= 55,
+                "text wrapping does not reserve the line number gutter");
+    }
     auto markdown_screen = ftxui::Screen::Create(
         ftxui::Dimension::Fixed(80), ftxui::Dimension::Fixed(24));
     ftxui::Render(markdown_screen, RenderPreview(snapshot));
@@ -94,6 +119,7 @@ int main() {
     preview::TextPreview numbered_text;
     numbered_text.display_lines = {
         {.text = "first", .line_number = 1},
+        {.text = "continued", .line_number = 1, .wrapped_continuation = true},
         {.text = "tenth", .line_number = 10},
     };
     numbered_result->content = std::move(numbered_text);
@@ -105,7 +131,7 @@ int main() {
     auto numbered_screen = ftxui::Screen::Create(
         ftxui::Dimension::Fixed(40), ftxui::Dimension::Fixed(10));
     ftxui::Render(numbered_screen, RenderPreview(numbered_snapshot));
-    const auto rendered_numbers = numbered_screen.ToString();
+    const auto rendered_numbers = StripAnsi(numbered_screen.ToString());
     const auto column_of = [&](std::string_view value) {
         const auto position = rendered_numbers.find(value);
         if (position == std::string::npos) return position;
@@ -113,7 +139,9 @@ int main() {
         return position - (line == std::string::npos ? 0 : line + 1);
     };
     Require(column_of("first") != std::string::npos &&
-                column_of("first") == column_of("tenth"),
+                column_of("first") == column_of("continued") &&
+                column_of("first") == column_of("tenth") &&
+                rendered_numbers.find("│ continued") != std::string::npos,
             "line number gutter is not aligned to its widest number");
 
     auto table_result = std::make_shared<preview::Preview>();
