@@ -1,144 +1,151 @@
 # duwiz
 
 `duwiz` (du wizard) is an interactive terminal file browser and disk-usage
-analyzer. It calculates directory sizes concurrently and prepares file previews
-on a separate worker so navigation remains responsive.
+analyzer. Directory sizes and file previews are prepared in the background so
+the interface remains responsive.
 
-Features:
+## Features
 
-- directory browsing and parallel size calculation;
-- UTF-8/UTF-16 text, bounded hex, and PNG/JPEG/GIF/BMP previews;
-- lexical highlighting for C/C++, Python, Bash, JSON and CMake;
-- readable Markdown rendering for headings, emphasis, links, lists, tasks,
-  quotes, fenced code and viewport-aware tables;
-- Kitty Unicode image placeholders with automatic ANSI fallback;
-- a fullscreen preview that requests an image at the larger viewport size;
-- PDF detection and opening in the native system viewer;
-- create, rename, and delete files or empty directories;
-- cancellation and stale-result rejection for background work.
+- browse directories and calculate disk usage;
+- preview text, source code, Markdown, JSON, CSV/TSV, ZIP/TAR archives and
+  binary files;
+- preview PNG, JPEG, GIF and BMP images using Kitty Unicode placeholders with
+  an automatic ANSI fallback;
+- open PDF files in the system viewer;
+- open a preview fullscreen without reusing a low-resolution sidebar image;
+- create, rename and delete files or empty directories;
+- cancel obsolete background preview and size-calculation work while browsing.
 
 > [!WARNING]
-> Confirmed deletion operates on the real filesystem and does not use Trash.
-> Non-empty directories are deliberately not deleted.
-
-## Supported platforms
-
-Only Linux x86-64 and macOS 13+ arm64 (Apple Silicon) are supported. Windows,
-Linux arm64, and Intel macOS are not supported. The Docker image is Linux
-x86-64 and can run under Docker Desktop emulation on Apple Silicon.
-
-## Dependencies
-
-The application uses C++20, CMake 3.24+, pinned FTXUI, and `preview_lib` as a
-Git submodule. `preview_lib` vendors stb for image decoding; it no longer uses
-PDFium or system image libraries. On Linux, `xdg-open` from `xdg-utils` is used
-for PDF opening. macOS uses the built-in `open` command.
-
-Install prerequisites:
-
-```sh
-./install_deps.sh
-```
-
-On Linux this supports apt, dnf, pacman, zypper, and apk. On macOS, install
-[Homebrew](https://brew.sh/) and Apple Command Line Tools first:
-
-```sh
-xcode-select --install
-./install_deps.sh
-```
-
-A full Xcode installation is not required.
-
-## Build from source
-
-```sh
-git clone --recurse-submodules https://github.com/kiquxd/duwiz.git
-cd duwiz
-./scripts/bootstrap_dependencies.sh
-make run
-./build/duwiz --path "$HOME"
-```
-
-For an existing clone:
-
-```sh
-git pull
-git submodule update --init --recursive
-./scripts/bootstrap_dependencies.sh
-make run
-```
-
-`make run` keeps its historical name: it configures and builds, but does not
-launch the fullscreen application. Run `make test` when you also want the test
-suite. Bootstrap downloads only the pinned
-FTXUI checkout; the preview library's stb headers are already vendored.
-`scripts/configure.sh` automatically refreshes legacy PDFium-based or relocated
-CMake caches.
+> Deletion is permanent and does not use Trash. `duwiz` refuses to delete
+> non-empty directories.
 
 ## Install
 
-No prebuilt release is currently published. The installer prepares the pinned
-dependencies, builds the project, and installs it for the current user:
+Supported hosts are Linux x86-64 and macOS 13+ on Apple Silicon. Windows,
+Linux arm64 and Intel macOS are not supported.
+
+Clone the repository, install the build prerequisites, then run the installer:
 
 ```sh
+git clone https://github.com/kiquxd/duwiz.git
+cd duwiz
+./install_deps.sh
 ./install.sh
+```
+
+On macOS, install [Homebrew](https://brew.sh/) and Apple Command Line Tools
+before running `install_deps.sh`:
+
+```sh
+xcode-select --install
+```
+
+`install_deps.sh` supports apt, dnf, pacman, zypper and apk on Linux. You may
+skip it when a C++20 compiler, CMake 3.24+ and Git are already installed. Linux
+also needs `xdg-open` from `xdg-utils` to open PDFs.
+
+`install.sh` initializes the `preview_lib` submodule, downloads the pinned
+FTXUI source, builds the application and installs it under `$HOME/.local`.
+The executable is placed at `$HOME/.local/bin/duwiz`; its required preview
+library is installed alongside it and needs no `LD_LIBRARY_PATH` or
+`DYLD_LIBRARY_PATH` configuration.
+
+If `$HOME/.local/bin` is not in `PATH`, add it to your shell profile and start a
+new shell:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Then run:
+
+```sh
 duwiz
 ```
 
-The default prefix is `$HOME/.local`, so the executable is placed at
-`$HOME/.local/bin/duwiz`. If that directory is not already in `PATH`, the
-installer prints the exact line to add to the shell profile. It also installs
-`libpreview.so`/`libpreview.dylib`, the public preview headers, CMake package
-metadata, and license notices. The executable uses a relative runtime search
-path, so `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` should not be needed.
-
-Without arguments, `duwiz` starts in the current user's home directory and uses
-one background filesystem worker. Override these defaults with `-p PATH` and
-`-j THREADS`.
-
-Use another prefix when needed:
+To install under another writable prefix:
 
 ```sh
-./install.sh --prefix /usr/local
+./install.sh --prefix /another/prefix
 ```
 
-Writing to a system prefix may require running that command with `sudo`.
+### Update
+
+From the existing clone:
+
+```sh
+git pull
+./install.sh
+```
+
+The installer also moves the submodule to the revision pinned by the updated
+`duwiz` checkout.
+
+## Usage
+
+Without arguments, `duwiz` starts in `$HOME` and uses one filesystem scanning
+worker. The preview worker remains separate.
+
+```sh
+duwiz                  # open $HOME with one scanning worker
+duwiz -p /some/path    # start in another directory
+duwiz -j 4             # use four scanning workers
+duwiz --help
+```
+
+Options:
+
+| Option | Meaning |
+|---|---|
+| `-p PATH`, `--path PATH` | Start directory; defaults to `$HOME` |
+| `-j THREADS` | Number of filesystem scanning workers; defaults to `1` |
+| `-h`, `--help` | Show command-line help |
 
 ## Controls
 
 | Key | Action |
 |---|---|
-| Up / Down | Select an entry and request its preview |
+| Up / Down | Select an entry |
 | Enter / Right | Enter the selected directory |
 | Left | Return to the previous directory |
-| `p` | Open/close fullscreen preview (`Esc` also closes it) |
+| `p` | Open or close fullscreen preview |
 | `o` | Open the selected PDF in the system viewer |
 | `c` | Create a file |
 | `m` | Create a directory |
 | `r` | Rename the selected entry |
-| `d` | Delete a file or empty directory after confirmation |
+| `d` | Ask to delete a file or empty directory |
+| `y` / `n` | Confirm or cancel deletion |
+| Esc | Close fullscreen preview or cancel text input |
 | `q` | Quit |
 
-The right pane is intentionally compact. In Kitty, images use Unicode graphics
-placeholders and a physical-pixel raster. Other terminals automatically use
-ANSI true color and the `▀` half block, giving two vertical pixels per cell.
-Fullscreen mode does not enlarge a small cached result: it asks `preview_lib`
-to decode/resize again for the full viewport. Set
-`DUWIZ_IMAGE_BACKEND=ansi` or `kitty` to override automatic selection while
-diagnosing terminal behavior. tmux currently uses ANSI in automatic mode.
-WebP is intentionally unsupported.
+## Preview behavior
 
-Markdown previews hide common source markers and use terminal typography for a
-readable document view. This is a deliberately dependency-free practical
-subset, not a browser or a complete CommonMark/GFM implementation; unsupported
-or ambiguous constructs remain readable text.
+| Content | Behavior |
+|---|---|
+| Text | UTF-8, UTF-8 BOM and UTF-16LE/BE BOM, line numbers, wrapping and bounded hex fallback for binary data |
+| Source | Dependency-free highlighting for C/C++, Python, Bash, JSON and CMake |
+| Markdown | Headings, emphasis, links, lists, tasks, quotes, fenced code and viewport-aware tables |
+| JSON | Validated and indented preview |
+| CSV/TSV | Bounded tables with quoted-field parsing and numeric alignment |
+| ZIP/TAR | Bounded archive listings without extraction |
+| Images | PNG, JPEG, first-frame GIF and BMP; JPEG orientation is applied |
+| PDF | Detection only; press `o` to open the system viewer |
 
-PDFs are not rendered inside the terminal. The preview pane identifies them and
-`o` starts `open` on macOS or `xdg-open` on Linux. The viewer is never launched
-automatically.
+Markdown support is a practical terminal-oriented subset, not a complete
+CommonMark/GFM implementation. WebP, ZIP64 and extended TAR names are currently
+unsupported.
+
+Kitty terminals use Unicode graphics placeholders and a physical-pixel image.
+Other terminals use ANSI true color and the `▀` half block. Automatic mode uses
+ANSI inside tmux because Kitty command passthrough is not implemented. Override
+detection for diagnostics with `DUWIZ_IMAGE_BACKEND=kitty` or
+`DUWIZ_IMAGE_BACKEND=ansi`.
 
 ## Docker
+
+Initialize the submodule before building because the Docker context does not
+contain Git metadata:
 
 ```sh
 git submodule update --init --recursive
@@ -146,28 +153,34 @@ docker build --platform=linux/amd64 -t duwiz .
 docker run --rm -it --platform=linux/amd64 \
   --user "$(id -u):$(id -g)" \
   --mount type=bind,source="$HOME",target=/data \
-  duwiz --path /data
+  duwiz -p /data
 ```
 
-The bind mount is writable by default, so mutations affect the host. Add
-`,readonly` for safe browsing. A graphical system PDF viewer is generally not
-available inside the container; `o` may therefore report that `xdg-open` could
-not be started.
+The bind mount is writable, so create, rename and delete operations affect the
+host. Add `,readonly` to the mount for read-only browsing. The runtime image
+does not include a graphical PDF viewer. On Apple Silicon, Docker Desktop runs
+this Linux x86-64 image under emulation.
 
 ## Development and tests
 
+The installer is the normal user-facing path. For development, prepare the
+pinned sources and use the Make targets without installing:
+
 ```sh
-make run
+./scripts/bootstrap_dependencies.sh
+make
 make test
+./build/duwiz
 ```
 
-To work against a separate library checkout without moving the submodule pin:
+To develop against a separate `preview_lib` checkout without changing the
+submodule revision:
 
 ```sh
 PREVIEW_ROOT=/path/to/preview_lib ./scripts/bootstrap_dependencies.sh
-PREVIEW_ROOT=/path/to/preview_lib make run
+PREVIEW_ROOT=/path/to/preview_lib make
 ```
 
-`preview_lib` is synchronous and UI-independent. `duwiz` owns its worker,
-debounce, cancellation, pane sizing, semantic syntax theme, and external viewer
+`preview_lib` is synchronous and UI-independent. `duwiz` owns background work,
+cancellation, pane sizing, terminal rendering and the external PDF viewer
 action.

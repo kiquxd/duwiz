@@ -32,6 +32,12 @@ while (($# > 0)); do
   esac
 done
 
+if [[ -z "${PREVIEW_ROOT+x}" && -f "${ROOT}/.gitmodules" ]] &&
+   git -C "${ROOT}" rev-parse --git-dir >/dev/null 2>&1; then
+  git -C "${ROOT}" submodule update --init --recursive -- \
+    third_party/preview_lib
+fi
+
 "${ROOT}/scripts/bootstrap_dependencies.sh"
 BUILD_DIR="${build_dir}" "${ROOT}/scripts/configure.sh"
 cmake --build "${build_dir}" -j
@@ -42,7 +48,7 @@ printf '\nduwiz was installed at %s/duwiz\n' "${bin_dir}"
 
 case ":${PATH:-}:" in
   *":${bin_dir}:"*)
-    printf 'Run it with: duwiz --path "$HOME"\n'
+    printf 'Run it with: duwiz\n'
     ;;
   *)
     printf '%s is not currently in PATH. Add this line to your shell profile:\n' \
