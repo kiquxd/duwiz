@@ -63,6 +63,16 @@ install(TARGETS duwiz
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 if(BUILD_TESTING)
+  add_executable(argparser_test
+    tests/argparser_test.cpp
+    src/lib/argparser.cpp)
+  target_compile_features(argparser_test PRIVATE cxx_std_20)
+  target_compile_options(argparser_test PRIVATE -Wall -Wextra -Wpedantic)
+  target_include_directories(argparser_test PRIVATE src)
+  add_test(NAME argparser_defaults COMMAND argparser_test)
+  add_test(NAME argparser_explicit_options
+    COMMAND argparser_test -p /tmp/duwiz-argparser-test -j 3)
+
   add_executable(preview_integration_test
     tests/preview_integration_test.cpp
     src/lib/preview_service.cpp

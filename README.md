@@ -76,24 +76,34 @@ FTXUI checkout; the preview library's stb headers are already vendored.
 `scripts/configure.sh` automatically refreshes legacy PDFium-based or relocated
 CMake caches.
 
-## Install the binary
+## Install
 
-No prebuilt release is currently published. After building:
-
-```sh
-cmake --install build --prefix "$HOME/.local"
-export PATH="$HOME/.local/bin:$PATH"
-duwiz --path "$HOME"
-```
-
-This installs the executable, `libpreview.so`/`libpreview.dylib`, the public
-preview headers, CMake package metadata, and license notices. The executable uses
-a relative runtime search path, so `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` should
-not be needed. For a system-wide install:
+No prebuilt release is currently published. The installer prepares the pinned
+dependencies, builds the project, and installs it for the current user:
 
 ```sh
-sudo cmake --install build --prefix /usr/local
+./install.sh
+duwiz
 ```
+
+The default prefix is `$HOME/.local`, so the executable is placed at
+`$HOME/.local/bin/duwiz`. If that directory is not already in `PATH`, the
+installer prints the exact line to add to the shell profile. It also installs
+`libpreview.so`/`libpreview.dylib`, the public preview headers, CMake package
+metadata, and license notices. The executable uses a relative runtime search
+path, so `LD_LIBRARY_PATH`/`DYLD_LIBRARY_PATH` should not be needed.
+
+Without arguments, `duwiz` starts in the current user's home directory and uses
+one background filesystem worker. Override these defaults with `-p PATH` and
+`-j THREADS`.
+
+Use another prefix when needed:
+
+```sh
+./install.sh --prefix /usr/local
+```
+
+Writing to a system prefix may require running that command with `sudo`.
 
 ## Controls
 

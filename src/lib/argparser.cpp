@@ -1,5 +1,14 @@
 #include "argparser.h"
+#include <cstdlib>
 #include <getopt.h>
+
+Config::Config() {
+    if (const char* home = std::getenv("HOME"); home != nullptr && home[0] != '\0') {
+        path = home;
+    } else {
+        path = ".";
+    }
+}
 
 Config parseFlags(int argc, char* argv[]) {
     Config config;

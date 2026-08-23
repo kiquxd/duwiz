@@ -20,8 +20,8 @@ void printHelpWindow(const std::string& binary) {
         "Usage: " + binary + " [options]\n"
             "Options: \n"
             "  --help (-h)   Show this screen and exit\n"
-            "  --path <path> Specify path from which duwiz should start\n"
-            "  -j <threads>  Max parallel jobs/tasks that can be running";
+            "  --path (-p) <path> Start directory (default: $HOME)\n"
+            "  -j <threads>       Max parallel jobs/tasks (default: 1)";
 
     auto document = vbox({
             filler(),
